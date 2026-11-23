@@ -6,7 +6,9 @@ import '../main.dart'
     show themeModeNotifier, fontFamilyNotifier, fontSizeNotifier, readerMarginNotifier,
         expressiveReadingNotifier, dictionaryLanguageNotifier, translationLanguageNotifier,
         appLocaleNotifier;
+import '../services/sherpa_tts_service.dart';
 import '../services/stats_service.dart';
+import 'voice_download_screen.dart';
 import '../widgets/pc_boost_tile.dart';
 import '../widgets/section_header.dart';
 import '../widgets/stat_tile.dart';
@@ -227,6 +229,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<int> _installedVoiceModels() async {
+    var count = 0;
+    for (final m in SherpaTtsService.models.where((m) => m.runsOnPhone)) {
+      if (await SherpaTtsService.instance.isModelInstalled(m.id)) count++;
+    }
+    return count;
+  }
+
   Widget _buildSettingsSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Column(
@@ -432,6 +442,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
               onChanged: _setAppLanguage,
             ),
+          ),
+        ),
+
+        const Divider(),
+
+        // ── Voix IA (téléchargement des modèles) ───────────────────────
+        SectionHeader(label: l10n.voiceDownloads_section),
+        FutureBuilder<int>(
+          future: _installedVoiceModels(),
+          builder: (context, snap) => ListTile(
+            leading: const Icon(Icons.record_voice_over_rounded),
+            title: Text(l10n.voiceDownloads_title),
+            subtitle: snap.hasData
+                ? Text(l10n.voiceDownloads_tileSubtitle(
+                    snap.data!,
+                    SherpaTtsService.models.where((m) => m.runsOnPhone).length))
+                : null,
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              await Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const VoiceDownloadScreen(),
+              ));
+              if (mounted) setState(() {});
+            },
           ),
         ),
 

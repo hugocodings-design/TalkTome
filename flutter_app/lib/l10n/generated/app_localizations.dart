@@ -1603,6 +1603,108 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Phrase {current} / {total}'**
   String audioHandler_sentenceProgress(int current, int total);
+
+  /// No description provided for @voiceDownloads_title.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voix IA'**
+  String get voiceDownloads_title;
+
+  /// No description provided for @voiceDownloads_manage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voix IA'**
+  String get voiceDownloads_manage;
+
+  /// No description provided for @voiceDownloads_section.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voix IA'**
+  String get voiceDownloads_section;
+
+  /// No description provided for @voiceDownloads_tileSubtitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'{installed} / {total} modèles installés sur ce téléphone'**
+  String voiceDownloads_tileSubtitle(int installed, int total);
+
+  /// No description provided for @voiceDownloads_intro.
+  ///
+  /// In fr, this message translates to:
+  /// **'Les voix IA fonctionnent hors ligne, directement sur le téléphone. Téléchargez celles que vous voulez — le Wi-Fi est conseillé, et gardez l\'application ouverte pendant l\'installation.'**
+  String get voiceDownloads_intro;
+
+  /// No description provided for @voiceDownloads_installAll.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tout télécharger (~{size} Mo)'**
+  String voiceDownloads_installAll(int size);
+
+  /// No description provided for @voiceDownloads_installed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Installé'**
+  String get voiceDownloads_installed;
+
+  /// No description provided for @voiceDownloads_download.
+  ///
+  /// In fr, this message translates to:
+  /// **'Télécharger'**
+  String get voiceDownloads_download;
+
+  /// No description provided for @voiceDownloads_downloading.
+  ///
+  /// In fr, this message translates to:
+  /// **'Téléchargement… {percent} %'**
+  String voiceDownloads_downloading(int percent);
+
+  /// No description provided for @voiceDownloads_extracting.
+  ///
+  /// In fr, this message translates to:
+  /// **'Installation… (quelques minutes)'**
+  String get voiceDownloads_extracting;
+
+  /// No description provided for @voiceDownloads_failed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Échec du téléchargement — touchez pour réessayer'**
+  String get voiceDownloads_failed;
+
+  /// No description provided for @voiceDownloads_delete.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer'**
+  String get voiceDownloads_delete;
+
+  /// No description provided for @voiceDownloads_deleteConfirm.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer {name} de ce téléphone ? Vous pourrez le retélécharger plus tard.'**
+  String voiceDownloads_deleteConfirm(String name);
+
+  /// No description provided for @voiceDownloads_cancel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Annuler'**
+  String get voiceDownloads_cancel;
+
+  /// No description provided for @voiceDownloads_sizeMb.
+  ///
+  /// In fr, this message translates to:
+  /// **'~{size} Mo'**
+  String voiceDownloads_sizeMb(int size);
+
+  /// No description provided for @voice_pcRequiredTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voix réservée à l\'ordinateur'**
+  String get voice_pcRequiredTitle;
+
+  /// No description provided for @voice_pcRequiredBody.
+  ///
+  /// In fr, this message translates to:
+  /// **'Cette voix (Qwen3-TTS) est générée par votre ordinateur avec TalkTome Boost, qui ne répond pas pour l\'instant. Allumez l\'ordinateur, vérifiez Profil → TalkTome Boost, ou choisissez une voix marquée « téléphone ».'**
+  String get voice_pcRequiredBody;
 }
 
 class _AppLocalizationsDelegate

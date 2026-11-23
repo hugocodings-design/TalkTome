@@ -6,6 +6,24 @@
 # shell:startup (et le dossier %LOCALAPPDATA%\TalkTomeBoost si voulu).
 
 $base = Join-Path $env:LOCALAPPDATA 'TalkTomeBoost'
+$startup = [Environment]::GetFolderPath('Startup')
+
+# Ancienne installation (nom « SpeechifyBoost ») : on arrête le serveur, on
+# déplace le dossier tel quel (environnement Python, modèles, code
+# d'appairage : rien à retélécharger) et on retire l'ancien raccourci.
+$old = Join-Path $env:LOCALAPPDATA 'SpeechifyBoost'
+if ((Test-Path $old) -and -not (Test-Path $base)) {
+    Get-CimInstance Win32_Process | Where-Object {
+        ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($old, 'OrdinalIgnoreCase')) -or
+        ($_.CommandLine -and $_.CommandLine -like "*$old*")
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 2
+    Move-Item $old $base
+    Remove-Item (Join-Path $base 'speechify_boost.py') -ErrorAction SilentlyContinue
+    Write-Output "Ancienne installation déplacée vers $base"
+}
+Remove-Item (Join-Path $startup 'Speechify Boost.lnk') -ErrorAction SilentlyContinue
+
 New-Item -ItemType Directory -Force $base | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'talktome_boost.py') $base -Force
 
@@ -19,7 +37,6 @@ Set sh = CreateObject("WScript.Shell")
 sh.Run """$pyw"" ""$script""", 0, False
 "@ | Out-File -Encoding ascii $vbs
 
-$startup = [Environment]::GetFolderPath('Startup')
 $lnk = Join-Path $startup 'TalkTome Boost.lnk'
 $shell = New-Object -ComObject WScript.Shell
 $s = $shell.CreateShortcut($lnk)
@@ -31,3 +48,7 @@ $s.Save()
 
 Write-Output "Installé. Lanceur : $vbs"
 Write-Output "Démarrage automatique : $lnk"
+
+# Démarre tout de suite, sans attendre le prochain redémarrage.
+Start-Process wscript.exe -ArgumentList "`"$vbs`"" -WorkingDirectory $base
+Write-Output "TalkTome Boost démarré."

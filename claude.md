@@ -1,7 +1,4 @@
-# TalkTome — AI-Powered Ebook Reader with TTS
-
-## What This Project Is
-A Flutter cross-platform mobile app that lets you upload ebooks (PDFs/EPUBs) and listen to them read aloud using Google Cloud Text-to-Speech with multiple voice options.
+# TalkTome — lecteur de livres avec voix IA locales
 
 ## Brand identity
 - **App name:** TalkTome ("a tome that talks" / "talk to me")
@@ -9,169 +6,56 @@ A Flutter cross-platform mobile app that lets you upload ebooks (PDFs/EPUBs) and
 - **Mascot:** Tomy — a thick purple grimoire with mystic runes, eyes and a mouth, wearing his red ribbon bookmark (signet) like a cape. Playful little hero; he's the one who will guide users through tutorials.
 - **Theme direction:** "Mystic night" — deep purple/indigo, soft gold accents, red reserved for the signet and key actions. Dark-first.
 
-## Phase 1 Status: COMPLETE ✅
-- Backend FastAPI server with Google Cloud TTS integration: **DONE**
-- Flutter project structure & core models: **DONE**  
-- Services (TTS, File extraction, Audio player): **DONE**
-- **Next:** Follow [PHASE_1_SETUP.md](./PHASE_1_SETUP.md) to set up credentials and test both services
+## Ce qu'est le projet
+Application Flutter (Android, iPhone) : on importe des livres (PDF, EPUB, pages web, pages scannées) et on les écoute lus par des voix IA. Tout fonctionne sur le téléphone, sans API payante :
+- **Voix IA** : sherpa-onnx (Kokoro, Piper), modèles dans `<support>/tts_models/<dossier>`.
+- **Dictionnaire** : base Wiktionary hors ligne (`<support>/dict/dict_<langue>.db`) + sens du mot dans sa phrase par Qwen 3 4B.
+- **IA locale Qwen** : llama.cpp intégré (`flutter_app/packages/llama_flutter_android`, Android uniquement), modèle `<support>/llm/qwen3-4b-instruct.gguf`.
+- **Traduction en direct** : ML Kit, sur le téléphone.
+- **TalkTome Boost** (`pc_server/`) : quand le PC est joignable (Wi-Fi ou Tailscale), voix et Qwen tournent sur sa carte graphique ; sinon le téléphone fait tout.
 
----
+Les modèles de voix, le dictionnaire et Qwen ne sont pas dans le dépôt : ils ont été copiés sur le téléphone Android à la main.
 
-## Tech Stack
-- **Frontend:** Flutter (Dart) + Material Design 3
-- **Audio Playback:** just_audio package
-- **Local Database:** Hive (key-value store)
-- **Text Extraction:** pdf + epub (Dart packages)
-- **TTS Engine:** Google Cloud Text-to-Speech API
-- **Backend:** Node.js/Python (FastAPI recommended)
-- **Deployment:** Google Cloud Run (or AWS Lambda)
-
----
-
-## Project Structure
-<PROJET>/
-├── claude.md
-├── backend/
-│ ├── server.js (or main.py)
-│ ├── requirements.txt
-│ ├── .env.example
-│ └── api/
-│ ├── voices (GET - list available voices)
-│ └── synthesize (POST - TTS endpoint)
-├── flutter_app/
-│ ├── pubspec.yaml
-│ ├── lib/
-│ │ ├── main.dart
-│ │ ├── screens/
-│ │ │ ├── home_screen.dart
-│ │ │ ├── upload_screen.dart
-│ │ │ ├── reader_screen.dart
-│ │ │ └── settings_screen.dart
-│ │ ├── models/
-│ │ │ ├── ebook.dart
-│ │ │ ├── chapter.dart
-│ │ │ └── audio_chunk.dart
-│ │ └── services/
-│ │ ├── tts_service.dart
-│ │ ├── file_service.dart
-│ │ └── audio_service.dart
-└── docs/
-└── setup_guide.md
-
----
-
-## Core Features (MVP)
-✅ Upload PDF/EPUB ebooks  
-✅ Extract text by chapter  
-✅ Voice selection (380+ voices from Google Cloud TTS)  
-✅ AI-powered audio synthesis  
-✅ Audio player with controls (play/pause, seek, speed 0.75x–1.5x)  
-✅ Local progress tracking (resume where you left off)  
-✅ Offline audio playback  
-
----
-
-## Technology Decisions
-
-| Component | Choice | Why |
-|-----------|--------|-----|
-| **Framework** | Flutter (Dart) | Single codebase for iOS & Android, easier language, hot reload |
-| **TTS Engine** | Google Cloud TTS | 380+ voices, affordable ($0.30/300-page book), reliable |
-| **Audio Player** | just_audio | Best Flutter audio package, playback speed, background audio |
-| **Local DB** | Hive | Lightweight, fast, perfect for local-only app |
-| **Text Extraction** | pdf + epub packages | No native dependencies, pure Dart |
-| **Backend** | FastAPI (Python) | Simple setup, easy TTS integration |
-
----
-
-## Implementation Plan (2–4 weeks)
-
-### Phase 1: Backend + Flutter Setup (2–3 days)
-- [ ] Create Flutter project: `flutter create talktome`
-- [ ] Add pubspec.yaml dependencies
-- [ ] Deploy backend with 2 endpoints: `/api/voices` and `/api/synthesize`
-- [ ] Set up Google Cloud TTS credentials
-
-### Phase 2: Ebook Upload & Text Extraction (3–4 days)
-- [ ] Build file picker UI
-- [ ] Implement PDF/EPUB text extraction
-- [ ] Split text into chunks, store in Hive
-- [ ] Display chapters with word counts
-
-### Phase 3: Voice Selection + TTS + Audio Player (4–5 days)
-- [ ] Voice selector dropdown UI
-- [ ] Google Cloud TTS integration
-- [ ] Audio player with just_audio
-- [ ] Playback speed & seek controls
-- [ ] Cache audio locally
-
-### Phase 4: UI Polish & Testing (2–3 days)
-- [ ] Complete Material Design 3 UI
-- [ ] Test on Android emulator (Windows)
-- [ ] Manual testing with real ebooks
-- [ ] Bug fixes & optimization
-
----
-
-## Estimated Costs
-- **Google Cloud TTS:** ~$0.30 per 300-page book
-- **Cloud Run hosting:** ~$5–10/month (free tier for POC)
-- **Total:** <$30 for initial testing
-
----
-
-## Commands (To Be Added)
-
-### Backend Startup
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python main.py  # Start on localhost:8000
-
-## Emplacement unique du projet (mis à jour 2026-08-22)
-
-Tout vit sous un seul dossier, noté `<PROJET>` ci-dessous (sur le PC : `c:\Users\Hdasi\Desktop\PROJETS VISUAL CODE\<nom du dossier du projet>`) :
+## Structure
 ```
-<PROJET>/
-├── backend/          ← serveur FastAPI (TTS)
-├── flutter_app/       ← l'application réelle (Accueil, Bibliothèque, +, Paramètres, Profil)
+TalkTome/
+├── flutter_app/   ← l'application
+├── pc_server/     ← TalkTome Boost (serveur du PC, voir son README)
+├── backend/       ← ancien serveur FastAPI Google Cloud TTS (obsolète, plus utilisé)
 └── claude.md
 ```
 
-### Pour démarrer (deux terminaux)
+## Identifiant de l'app
+`com.hugocodings.talktome` (Android et iOS ; définitif une fois publié). L'ancienne app `com.example.speechify` est une app différente pour Android : ses données se recopient dans la nouvelle avec `run-as` (les deux sont des builds debug). Une app intermédiaire `com.hugo.talktome` (installée par erreur le 2026-11-23) est à désinstaller.
 
-`<CLE_JSON>` = le fichier JSON de la clé du compte de service Google Cloud, rangé dans `<PROJET>` et jamais commité.
-
-```powershell
-# Terminal 1 — Backend
-cd "<PROJET>\backend"
-venv\Scripts\activate
-$env:GOOGLE_APPLICATION_CREDENTIALS="<PROJET>\<CLE_JSON>"
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-Note : utiliser `python -m uvicorn`, pas `uvicorn.exe` directement — le stub `.exe` est bloqué sur cette machine.
+## Compiler et installer sur le téléphone Android (PowerShell)
 
 ```powershell
-# Terminal 2 — Flutter (l'app réelle, avec Accueil/Bibliothèque/Profil)
-cd "<PROJET>\flutter_app"
-$env:PATH += ";<PROJET>\flutter_windows_3.41.5-stable\flutter\bin"
-flutter run -d R5CX81KDFJJ
+cd "c:\Users\Hdasi\Desktop\PROJETS VISUAL CODE\TalkTome\flutter_app"
+$env:PATH += ";C:\Users\Hdasi\Desktop\PROJETS CLAUDE\SPEECHIFY HUGO\flutter_windows_3.41.5-stable\flutter\bin;$env:LOCALAPPDATA\Android\Sdk\platform-tools"
+flutter build apk --debug
+adb devices
+adb -s <appareil> install -r build\app\outputs\flutter-apk\app-debug.apk
 ```
+(Le SDK Flutter est encore rangé dans l'ancien dossier `PROJETS CLAUDE\SPEECHIFY HUGO` sur le PC.)
 
-### Pour arrêter
-- Backend : Ctrl+C dans le terminal uvicorn
-- Flutter : `q` dans le terminal flutter run
+⚠️ Ne jamais utiliser `flutter install` pour mettre à jour l'app : ça désinstalle l'app avant de la réinstaller et efface toutes les données locales. Toujours `adb install -r`, qui les préserve.
 
-⚠️ Ne jamais utiliser `flutter install` pour mettre à jour l'app sur le téléphone — ça désinstalle l'app avant de la réinstaller et efface toutes les données locales (bibliothèque, progression de lecture). Toujours utiliser `adb install -r build\app\outputs\flutter-apk\app-debug.apk`, qui préserve les données.
+Débogage sans fil : `adb pair <ip>:<port d'appairage>` (une fois), puis `adb connect <ip>:<port>` ; l'appareil s'appelle alors `<ip>:<port>`.
 
----
+## Dépôt Git / GitHub
+- Dépôt : `https://github.com/hugocodings-design/TalkTome`.
+- `master` = version Android. La version iPhone vit sur sa propre branche `ios` (voir le `claude.md` de cette branche) ; pour lui apporter une nouveauté Android : `git checkout ios && git merge master`. Ne jamais fusionner `ios` dans `master`.
 
-## Dépôt Git / GitHub (ajouté 2026-09-23)
+## Voix (phase de développement)
+Chaque voix s'affiche « <moteur> <nom> ♀/♂ », dans une section « <langue> · <moteur> · téléphone | ordinateur requis » (`lib/data/voice_characters.dart`). Catalogue : `lib/services/sherpa_tts_service.dart` ; modèles téléchargeables depuis Profil → Voix IA.
 
-- Le vrai dépôt Git est à la racine de `<PROJET>/` (pas dans `flutter_app/`). Il est déjà connecté à GitHub :
-  `https://github.com/hugocodings-design/TalkTome` (privé).
-- Toujours lancer les commandes `git` depuis `<PROJET>/`, pas depuis `flutter_app/`.
-- ⚠️ Piège connu : le dossier `flutter_app/` contient un **second `.git` imbriqué**, orphelin, jamais poussé sur GitHub, avec un historique totalement différent (ancien projet séparé avant la fusion du 2026-08-22). Si une commande `git` lancée depuis `flutter_app/` donne des résultats étranges (historique inconnu, remote absent), c'est ce `.git` parasite qui répond à la place de celui de `<PROJET>/`. Il faudra le supprimer un jour (`flutter_app/.git` uniquement, aucun fichier de code n'est concerné).
-- Pour cloner ce projet sur un autre appareil (PC boulot, etc.) : `git clone https://github.com/hugocodings-design/TalkTome.git`, puis suivre les instructions de démarrage ci-dessus.
+| Moteur | Où | Langues | Voix |
+|---|---|---|---|
+| Kokoro (fp32) | téléphone | EN 3F+3M, FR 1F, PT-BR 1F+2M | natives uniquement |
+| Supertonic 3 (int8) | téléphone | FR, EN, PT : 3F+3M chacune | F1–F3 = identifiants 0–2, M1–M3 = 5–7 ; langue passée par `extra: {'lang': …}` |
+| Pocket TTS (int8) | téléphone | EN 3F+3M | voix imitées d'extraits VCTK (`<modèle>/voices/*.wav`, téléchargés avec le modèle) |
+| Piper | téléphone | FR, PT | anciennes voix (Miro FR/PT, Dii et Tom interdits en usage commercial) |
+| Qwen3-TTS | **ordinateur uniquement** (TalkTome Boost) | FR, EN, PT-PT : 3F+3M chacune | décrites dans `pc_server/qwen_voices.json` (mêmes identifiants), créées par `install_qwen_tts.ps1` |
+
+Le serveur du PC ne fait tourner que Kokoro, Piper et Qwen3 ; Supertonic et Pocket restent toujours sur le téléphone.

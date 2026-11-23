@@ -15,6 +15,8 @@ import '../services/sherpa_tts_service.dart';
 import '../services/dictionary_service.dart';
 import '../services/translation_service.dart';
 import '../services/local_llm_service.dart';
+import '../services/pc_boost_service.dart';
+import 'voice_download_screen.dart';
 import '../main.dart'
     show themeModeNotifier, fontFamilyNotifier, fontSizeNotifier, readerMarginNotifier,
         dictionaryLanguageNotifier, translationLanguageNotifier,
@@ -2610,9 +2612,39 @@ class _ReaderScreenState extends State<ReaderScreen> {
       });
     }
 
+    await _refreshVoices();
+
+    // Précharge l'IA locale en arrière-plan (sans gêner la voix) : elle sera
+    // prête quand l'utilisateur touchera « Définir ».
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted) unawaited(LocalLlmService.instance.warmUp(pauseAudio: false));
+    });
+
+    // Demander les permissions requises pour la lecture en arrière-plan
+    await _requestBackgroundPermissions();
+  }
+
+  /// Recharge la liste des voix disponibles (à l'ouverture, et au retour
+  /// de l'écran de téléchargement des voix IA).
+  Future<void> _refreshVoices() async {
     // 100 % gratuit : uniquement les voix IA locales installées sur le
     // téléphone, dans l'ordre anglais → français → portugais.
-    final aiVoices = await SherpaTtsService.instance.installedVoices();
+    // Ordinateur joignable (TalkTome Boost) : il a toutes les voix, même
+    // celles qui ne sont pas installées sur ce téléphone (iPhone…).
+    final boostReady = await PcBoostService.instance.base() != null;
+    // Les voix réservées à l'ordinateur (Qwen3-TTS) restent toujours
+    // visibles, signalées comme telles : on sait ainsi lesquelles ne
+    // marchent pas avec le téléphone seul.
+    final installed = (await SherpaTtsService.instance.installedVoices())
+        .map((v) => v.name)
+        .toSet();
+    final aiVoices = boostReady
+        ? SherpaTtsService.voices
+        : SherpaTtsService.voices
+            .where((v) =>
+                installed.contains(v.name) ||
+                !SherpaTtsService.modelById(v.modelId).runsOnPhone)
+            .toList();
     final voices = <Voice>[
       ...aiVoices.map((v) => Voice(
             name: v.name,
@@ -2648,15 +2680,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
       widget.ebook.selectedVoiceName = fallback.name;
       await ebookBox.put(widget.ebook.id, widget.ebook);
     }
+  }
 
-    // Précharge l'IA locale en arrière-plan (sans gêner la voix) : elle sera
-    // prête quand l'utilisateur touchera « Définir ».
-    Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) unawaited(LocalLlmService.instance.warmUp(pauseAudio: false));
-    });
-
-    // Demander les permissions requises pour la lecture en arrière-plan
-    await _requestBackgroundPermissions();
+  /// Écran de téléchargement des voix IA, puis mise à jour de la liste.
+  Future<void> _openVoiceDownloads() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const VoiceDownloadScreen(),
+    ));
+    if (mounted) await _refreshVoices();
   }
 
   /// Demande la permission notification (Android 13+) et l'exemption batterie (Samsung One UI)
@@ -2783,9 +2814,33 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
-  void _changeVoice(String? newVoiceName) {
+  Future<void> _changeVoice(String? newVoiceName) async {
     if (newVoiceName == null) return;
     final voice = availableVoices.firstWhere((v) => v.name == newVoiceName);
+    // Voix de l'ordinateur alors que TalkTome Boost ne répond pas : on le
+    // dit plutôt que de laisser la lecture échouer.
+    final ai = SherpaTtsService.voiceByName(voice.name);
+    if (ai != null &&
+        !SherpaTtsService.modelById(ai.modelId).runsOnPhone &&
+        await PcBoostService.instance.base() == null) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.voice_pcRequiredTitle),
+          content: Text(l10n.voice_pcRequiredBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.common_close),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       selectedVoice = voice.name;
       selectedLanguageCode = voice.languageCode;
@@ -2838,8 +2893,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
             final character = characterForVoice(v.name);
             final isSelected = v.name == selectedVoice;
             return GestureDetector(
-              onTap: () {
-                _changeVoice(v.name);
+              onTap: () async {
+                await _changeVoice(v.name);
                 // Le panneau reste ouvert (pas de Navigator.pop) pour
                 // pouvoir essayer plusieurs voix d'affilée rapidement.
                 onSelected?.call();
@@ -3007,12 +3062,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     ),
                   ),
                 ),
-                Text(
-                  AppLocalizations.of(context)!.reader_chooseVoice,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        AppLocalizations.of(context)!.reader_chooseVoice,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _openVoiceDownloads();
+                      },
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: Text(AppLocalizations.of(context)!.voiceDownloads_manage),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 _buildPitchSlider(context, () => setModalState(() {})),
@@ -4173,7 +4242,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     Transform.translate(
                       offset: const Offset(10, -8),
                       child: GestureDetector(
-                      onTap: availableVoices.isEmpty ? null : _showVoicePicker,
+                      onTap: availableVoices.isEmpty ? _openVoiceDownloads : _showVoicePicker,
                       child: ClipOval(
                         child: availableVoices.any((v) => v.name == selectedVoice)
                             ? VoiceAvatar(

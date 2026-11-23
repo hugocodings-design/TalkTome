@@ -176,6 +176,7 @@ class PcBoostService {
     required String text,
     required double speed,
     required String outPath,
+    Duration timeout = const Duration(seconds: 25),
   }) async {
     final b = await base();
     if (b == null) return null;
@@ -185,8 +186,8 @@ class PcBoostService {
         ..set('X-Boost-Token', code)
         ..contentType = ContentType.json;
       req.add(utf8.encode(jsonEncode({...voiceSpec, 'text': text, 'speed': speed})));
-      final res = await req.close().timeout(const Duration(seconds: 25));
-      final bytes = await _readAll(res).timeout(const Duration(seconds: 25));
+      final res = await req.close().timeout(timeout);
+      final bytes = await _readAll(res).timeout(timeout);
       if (res.statusCode != 200) {
         // 422 : phrase impossible à synthétiser (ponctuation seule…) — ce
         // n'est pas une panne de l'ordinateur, on le garde.

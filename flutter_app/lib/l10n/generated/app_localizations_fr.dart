@@ -965,4 +965,68 @@ class AppLocalizationsFr extends AppLocalizations {
   String audioHandler_sentenceProgress(int current, int total) {
     return 'Phrase $current / $total';
   }
+
+  @override
+  String get voiceDownloads_title => 'Voix IA';
+
+  @override
+  String get voiceDownloads_manage => 'Voix IA';
+
+  @override
+  String get voiceDownloads_section => 'Voix IA';
+
+  @override
+  String voiceDownloads_tileSubtitle(int installed, int total) {
+    return '$installed / $total modèles installés sur ce téléphone';
+  }
+
+  @override
+  String get voiceDownloads_intro =>
+      'Les voix IA fonctionnent hors ligne, directement sur le téléphone. Téléchargez celles que vous voulez — le Wi-Fi est conseillé, et gardez l\'application ouverte pendant l\'installation.';
+
+  @override
+  String voiceDownloads_installAll(int size) {
+    return 'Tout télécharger (~$size Mo)';
+  }
+
+  @override
+  String get voiceDownloads_installed => 'Installé';
+
+  @override
+  String get voiceDownloads_download => 'Télécharger';
+
+  @override
+  String voiceDownloads_downloading(int percent) {
+    return 'Téléchargement… $percent %';
+  }
+
+  @override
+  String get voiceDownloads_extracting => 'Installation… (quelques minutes)';
+
+  @override
+  String get voiceDownloads_failed =>
+      'Échec du téléchargement — touchez pour réessayer';
+
+  @override
+  String get voiceDownloads_delete => 'Supprimer';
+
+  @override
+  String voiceDownloads_deleteConfirm(String name) {
+    return 'Supprimer $name de ce téléphone ? Vous pourrez le retélécharger plus tard.';
+  }
+
+  @override
+  String get voiceDownloads_cancel => 'Annuler';
+
+  @override
+  String voiceDownloads_sizeMb(int size) {
+    return '~$size Mo';
+  }
+
+  @override
+  String get voice_pcRequiredTitle => 'Voix réservée à l\'ordinateur';
+
+  @override
+  String get voice_pcRequiredBody =>
+      'Cette voix (Qwen3-TTS) est générée par votre ordinateur avec TalkTome Boost, qui ne répond pas pour l\'instant. Allumez l\'ordinateur, vérifiez Profil → TalkTome Boost, ou choisissez une voix marquée « téléphone ».';
 }

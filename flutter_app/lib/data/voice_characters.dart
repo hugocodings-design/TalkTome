@@ -148,9 +148,23 @@ VoiceCharacter characterForVoice(String voiceName) {
       'pt-PT': 'Portugais (Portugal)',
       'pt-BR': 'Portugais (Brésil)',
     };
+    // Phase de développement : chaque voix affiche son moteur (et son
+    // genre), et chaque section dit où elle tourne — téléphone, ou
+    // ordinateur obligatoire (TalkTome Boost).
+    final spec = SherpaTtsService.modelById(ai.modelId);
+    const tags = {
+      SherpaModelKind.kokoro: 'Kokoro',
+      SherpaModelKind.piper: 'Piper',
+      SherpaModelKind.supertonic: 'Supertonic',
+      SherpaModelKind.pocket: 'Pocket',
+      SherpaModelKind.qwen3: 'Qwen3',
+    };
+    final gender = switch (ai.gender) { 'F' => ' ♀', 'M' => ' ♂', _ => '' };
+    final where = spec.runsOnPhone ? 'téléphone' : 'ordinateur requis';
     return VoiceCharacter(
-      name: ai.displayName,
-      language: '${languages[ai.languageCode] ?? ai.languageCode} · IA locale',
+      name: '${tags[spec.kind]} ${ai.displayName}$gender',
+      language: '${languages[ai.languageCode] ?? ai.languageCode} · '
+          '${spec.engineName} · $where',
       photoAsset: '',
     );
   }
