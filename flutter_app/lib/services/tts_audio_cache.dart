@@ -83,7 +83,8 @@ class TtsAudioCache {
 
   /// v3 (2026-11-23) : silences de début/fin raccourcis (Supertonic), phrases
   /// de Pocket TTS qui ne s'arrêtaient pas (plafond de longueur + reprise).
-  static const String _audioVersion = 'v3';
+  /// v4 : texte nettoyé pour Pocket TTS (guillemets, …, parenthèses).
+  static const String _audioVersion = 'v4';
 
   /// FNV-1a 64 bits : nom de fichier stable pour (voix, vitesse, texte, et
   /// silence ajouté après la phrase s'il y en a un).

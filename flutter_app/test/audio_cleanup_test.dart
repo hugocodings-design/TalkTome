@@ -51,6 +51,34 @@ void main() {
     });
   });
 
+  group('pocketCleanText', () {
+    // Caractères ASCII imprimables sauf ( ) # [ ] { } et guillemets droits,
+    // comme le vocabulaire de Pocket.
+    final allowed = {
+      for (var c = 32; c < 127; c++) String.fromCharCode(c),
+    }..removeAll(['(', ')', '#', '[', ']', '{', '}', '"']);
+
+    test('dialogue de livre : guillemets typographiques retirés', () {
+      expect(pocketCleanText('“Oh!” Larry said. “It’s the sun!”', allowed),
+          "Oh! Larry said. It's the sun!");
+    });
+
+    test('tirets, parenthèses, points de suspension, signes inconnus', () {
+      expect(
+          pocketCleanText(
+              'Outsmarted (again). Wasn’t the first time…', allowed),
+          "Outsmarted, again. Wasn't the first time...");
+      expect(pocketCleanText('Warning – hull breach #3.', allowed),
+          'Warning, hull breach 3.');
+      expect(pocketCleanText('“Three thousand, nine hundre—”', allowed),
+          'Three thousand, nine hundre');
+    });
+
+    test('sans vocabulaire connu, seule la typographie est simplifiée', () {
+      expect(pocketCleanText('“Été” — fin', const {}), 'Été, fin');
+    });
+  });
+
   group('pocketPrompt', () {
     test('phrase courte : ponctuation, espaces devant, peu de trames', () {
       final p = pocketPrompt('chapter one');
