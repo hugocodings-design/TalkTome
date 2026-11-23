@@ -45,7 +45,8 @@ Débogage sans fil : `adb pair <ip>:<port d'appairage>` (une fois), puis `adb co
 
 ## Dépôt Git / GitHub
 - Dépôt : `https://github.com/hugocodings-design/TalkTome`.
-- `master` = version Android. La version iPhone vit sur sa propre branche `ios` (section ci-dessous) ; pour lui apporter une nouveauté Android : `git checkout ios && git merge master`. Ne jamais fusionner `ios` dans `master`.
+- **Une seule branche principale : `master`** = la version Android avec le design Tomy (le livre à cape qui parle : thème `lib/theme/talktome_theme.dart`, `lib/widgets/tomy.dart`). Tout le travail part de `master` et y revient ; pas d'autres branches durables.
+- La version iPhone vit sur sa propre branche `ios` (section ci-dessous), avec le même design Tomy ; pour lui apporter une nouveauté Android : `git checkout ios && git merge master`. Ne jamais fusionner `ios` dans `master`.
 
 ## iPhone (iOS) — branche `ios`
 

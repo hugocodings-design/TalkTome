@@ -12,6 +12,7 @@ import 'scan/camera_capture_screen.dart';
 import 'annotations_screen.dart';
 import 'url_import_screen.dart';
 import '../widgets/mini_player.dart';
+import '../theme/talktome_theme.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -184,7 +185,8 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      body: Column(
+      body: MysticBackdrop(
+        child: Column(
         children: [
           Expanded(
             child: IndexedStack(
@@ -202,6 +204,7 @@ class _MainScreenState extends State<MainScreen> {
           const MiniPlayer(),
         ],
       ),
+      ),
 
       // Barre de navigation en bas — le "+" est un bouton parmi les autres,
       // au même niveau, pas surélevé ni séparé du reste de la barre.
@@ -209,8 +212,8 @@ class _MainScreenState extends State<MainScreen> {
         // Hauteur explicite : la hauteur par défaut (56px) était trop
         // juste pour icône + texte de chaque bouton, causant un léger
         // débordement (~2-3px) visible en bas de l'écran.
-        height: 70,
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        height: 74,
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           // Expanded sur chaque bouton : force les 5 à se partager la
           // largeur à parts égales. Sans ça, avec 5 items (au lieu de 4
@@ -287,29 +290,44 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = currentIndex == index;
+    final accent = TT.accent(context);
     final color = selected
-        ? Theme.of(context).colorScheme.primary
-        : Colors.grey[600];
+        ? accent
+        : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8);
 
     return InkWell(
       onTap: () => onTap(index),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 2),
+            // Pastille dorée derrière l'icône de l'onglet actif
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              width: selected ? 52 : 36,
+              height: 30,
+              decoration: BoxDecoration(
+                color: selected ? accent.withOpacity(0.16) : Colors.transparent,
+                borderRadius: BorderRadius.circular(15),
+                border: selected
+                    ? Border.all(color: accent.withOpacity(0.45))
+                    : null,
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 3),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 10.5,
                 color: color,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
               ),
             ),
           ],
@@ -329,32 +347,35 @@ class _AddNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Colors.grey[600];
-
+    // Bouton "Ajouter" = action clé → rouge signet (comme la cape de Tomy)
     return InkWell(
       onTap: isLoading ? null : onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            isLoading
-                ? SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
-                  )
-                : Icon(Icons.add_circle_outline_rounded, color: color, size: 24),
-            const SizedBox(height: 2),
-            Text(
-              AppLocalizations.of(context)!.nav_add,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10, color: color),
-            ),
-          ],
+      customBorder: const CircleBorder(),
+      child: Center(
+        child: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: TT.signetGradient,
+            border: Border.all(color: TT.gold.withOpacity(0.85), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: TT.signet.withOpacity(0.45),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: isLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(13),
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                )
+              : Semantics(
+                  label: AppLocalizations.of(context)!.nav_add,
+                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+                ),
         ),
       ),
     );

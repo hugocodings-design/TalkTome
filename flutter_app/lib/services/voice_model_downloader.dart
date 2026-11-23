@@ -11,6 +11,11 @@ import 'sherpa_tts_service.dart';
 /// Étape d'installation d'un modèle de voix IA.
 enum VoiceDownloadPhase { downloading, extracting, failed }
 
+/// Tâche de décompression à lancer dans un autre isolate. Ne capture que les
+/// deux chemins (des chaînes), seules valeurs envoyées à l'isolate.
+Future<void> Function() _extractJob(String archivePath, String extractDir) =>
+    () => extractFileToDisk(archivePath, extractDir);
+
 /// Avancement d'une installation en cours.
 class VoiceDownloadState {
   const VoiceDownloadState(this.phase, {this.progress = 0, this.error});
@@ -113,7 +118,10 @@ class VoiceModelDownloader {
 
       _set(modelId, const VoiceDownloadState(VoiceDownloadPhase.extracting));
       // Décompression bzip2 en pur Dart : lourde, donc hors du fil principal.
-      await Isolate.run(() => extractFileToDisk(archivePath, extractDir));
+      // Fonction de premier niveau : une fermeture définie ici emporterait
+      // tout le contexte de la méthode (dont le CancelToken, impossible à
+      // envoyer à un autre isolate) et l'installation échouerait.
+      await Isolate.run(_extractJob(archivePath, extractDir));
 
       final extracted = Directory('$extractDir/${spec.folder}');
       if (!await File('${extracted.path}/${spec.modelFile}').exists()) {

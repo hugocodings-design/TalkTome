@@ -135,6 +135,32 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get tomy_greetMorning => 'Good morning!';
+
+  @override
+  String get tomy_greetAfternoon => 'Good afternoon!';
+
+  @override
+  String get tomy_greetEvening => 'Good evening!';
+
+  @override
+  String get tomy_greetNight => 'Still up?';
+
+  @override
+  String tomy_continue(String title) {
+    return 'Shall we pick up “$title”? I\'m ready to read it to you.';
+  }
+
+  @override
+  String tomy_streak(int count) {
+    return '$count days in a row, let\'s keep the streak going!';
+  }
+
+  @override
+  String get tomy_idle =>
+      'Pick a book from your library and I\'ll read it aloud to you.';
+
+  @override
   String get recentScreen_inProgress => 'In progress';
 
   @override

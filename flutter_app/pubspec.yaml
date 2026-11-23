@@ -98,6 +98,7 @@ flutter:
 
   assets:
     - assets/avatars/
+    - assets/branding/tomy.png
   # fonts:
   #   - family: CustomFont
   #     fonts:

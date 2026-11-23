@@ -3,7 +3,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../models/ebook.dart';
 import '../services/stats_service.dart';
+import '../theme/talktome_theme.dart';
 import '../widgets/stat_tile.dart';
+import '../widgets/tomy.dart';
 import 'home_screen.dart' show BookCover;
 import 'reader_screen.dart';
 
@@ -13,8 +15,9 @@ class RecentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('TalkTome'),
+        title: const _TalkTomeTitle(),
         centerTitle: true,
         elevation: 0,
       ),
@@ -34,7 +37,10 @@ class RecentScreen extends StatelessWidget {
                 .compareTo(a.lastOpenedAt ?? a.uploadedAt));
 
           if (allBooks.isEmpty) {
-            return _buildEmptyState(context);
+            return TomyEmptyState(
+              title: l10n.recentScreen_noBooks,
+              message: l10n.recentScreen_addPrompt,
+            );
           }
 
           final stats = StatsService.instance;
@@ -46,14 +52,42 @@ class RecentScreen extends StatelessWidget {
           final streak = stats.getCurrentStreakDays();
           final finishedCount = allBooks.where((e) => e.isFinished).length;
 
+          final hour = now.hour;
+          final greeting = hour < 5
+              ? l10n.tomy_greetNight
+              : hour < 12
+                  ? l10n.tomy_greetMorning
+                  : hour < 18
+                      ? l10n.tomy_greetAfternoon
+                      : hour < 23
+                          ? l10n.tomy_greetEvening
+                          : l10n.tomy_greetNight;
+          var message = inProgress.isNotEmpty
+              ? l10n.tomy_continue(inProgress.first.title)
+              : l10n.tomy_idle;
+          if (streak >= 2) message = '$message\n${l10n.tomy_streak(streak)}';
+
           return ListView(
             padding: const EdgeInsets.only(bottom: 100),
             children: [
+              // ── Tomy ────────────────────────────────────────────────────
+              GestureDetector(
+                onTap: inProgress.isEmpty
+                    ? null
+                    : () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  ReaderScreen(ebook: inProgress.first)),
+                        ),
+                child: TomySays(title: greeting, message: message),
+              ),
+
               // ── En cours ────────────────────────────────────────────────
               if (inProgress.isNotEmpty) ...[
-                _SectionHeader(label: l10n.recentScreen_inProgress),
+                MysticSectionHeader(label: l10n.recentScreen_inProgress),
                 SizedBox(
-                  height: 230,
+                  height: 252,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -62,11 +96,10 @@ class RecentScreen extends StatelessWidget {
                         _InProgressCard(ebook: inProgress[i]),
                   ),
                 ),
-                const SizedBox(height: 8),
               ],
 
               // ── Statistiques ────────────────────────────────────────────
-              _SectionHeader(label: l10n.recentScreen_statistics),
+              MysticSectionHeader(label: l10n.recentScreen_statistics),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
@@ -75,7 +108,7 @@ class RecentScreen extends StatelessWidget {
                       children: [
                         Expanded(
                           child: StatTile(
-                            icon: Icons.today,
+                            icon: Icons.wb_twilight_rounded,
                             label: l10n.recentScreen_today,
                             value: StatsService.formatSeconds(todaySec),
                           ),
@@ -83,7 +116,7 @@ class RecentScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: StatTile(
-                            icon: Icons.calendar_view_week,
+                            icon: Icons.nights_stay_rounded,
                             label: l10n.recentScreen_thisWeek,
                             value: StatsService.formatSeconds(weekSec),
                           ),
@@ -95,7 +128,7 @@ class RecentScreen extends StatelessWidget {
                       children: [
                         Expanded(
                           child: StatTile(
-                            icon: Icons.local_fire_department,
+                            icon: Icons.local_fire_department_rounded,
                             label: l10n.recentScreen_streak,
                             value: l10n.recentScreen_streakDays(streak),
                             highlight: streak > 0,
@@ -104,7 +137,7 @@ class RecentScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: StatTile(
-                            icon: Icons.menu_book,
+                            icon: Icons.auto_stories_rounded,
                             label: l10n.recentScreen_inProgressAndFinished,
                             value: l10n.recentScreen_countRatio(inProgress.length, finishedCount),
                           ),
@@ -120,45 +153,34 @@ class RecentScreen extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildEmptyState(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.library_books_outlined, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(l10n.recentScreen_noBooks, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(
-            l10n.recentScreen_addPrompt,
-            style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ─── Widgets internes ─────────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader({required this.label});
+/// Titre "TalkTome" : "Talk" + "Tome" en or, avec une petite étincelle.
+class _TalkTomeTitle extends StatelessWidget {
+  const _TalkTomeTitle();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        label,
-        style: Theme.of(context)
-            .textTheme
-            .labelLarge
-            ?.copyWith(color: Colors.grey[600]),
-      ),
+    final accent = TT.accent(context);
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.auto_awesome, size: 18, color: accent),
+        const SizedBox(width: 6),
+        Text.rich(
+          TextSpan(
+            style: const TextStyle(
+                fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: 0.4),
+            children: [
+              TextSpan(text: 'Talk', style: TextStyle(color: onSurface)),
+              TextSpan(text: 'Tome', style: TextStyle(color: accent)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -173,6 +195,8 @@ class _InProgressCard extends StatelessWidget {
     final progress = ebook.totalSentences > 0
         ? (ebook.lastReadPosition / ebook.totalSentences).clamp(0.0, 1.0)
         : 0.0;
+    final accent = TT.accent(context);
+    final scheme = Theme.of(context).colorScheme;
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -180,8 +204,14 @@ class _InProgressCard extends StatelessWidget {
         MaterialPageRoute(builder: (_) => ReaderScreen(ebook: ebook)),
       ),
       child: Container(
-        width: 140,
-        margin: const EdgeInsets.only(right: 12),
+        width: 148,
+        margin: const EdgeInsets.only(right: 12, bottom: 8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh.withOpacity(0.75),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: accent.withOpacity(0.25)),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -189,8 +219,8 @@ class _InProgressCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: SizedBox(
-                width: 140,
-                height: 140,
+                width: 132,
+                height: 132,
                 child: BookCover(
                   title: ebook.title,
                   isPdf: ebook.fileFormat == 'pdf',
@@ -204,24 +234,24 @@ class _InProgressCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
                   ),
             ),
-            const SizedBox(height: 6),
+            const Spacer(),
             // Barre de progression
             ClipRRect(
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
                 value: progress,
-                minHeight: 4,
-                backgroundColor: Colors.grey[300],
+                minHeight: 5,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               AppLocalizations.of(context)!.recentScreen_percentRead((progress * 100).round()),
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: Colors.grey[600]),
+                  ?.copyWith(color: accent, fontWeight: FontWeight.w600),
             ),
           ],
         ),
