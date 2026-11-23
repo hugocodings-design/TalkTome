@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../l10n/generated/app_localizations.dart';
+import '../theme/talktome_theme.dart';
+import '../widgets/tomy.dart';
 import '../models/ebook.dart';
 import '../models/folder.dart';
 import 'reader_screen.dart';
@@ -386,6 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final isRoot = _currentFolderId == null;
 
         return Scaffold(
+          backgroundColor: Colors.transparent,
           appBar: _isSelectionMode ? _buildSelectionAppBar() : _buildNormalAppBar(),
           body: (books.isEmpty && folders.isEmpty && isRoot)
               ? _buildEmptyState()
@@ -453,15 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         // Dossiers (visibles seulement à la racine)
         if (isRoot && folders.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Text(
-              l10n.home_folders,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-            ),
-          ),
+          MysticSectionHeader(label: l10n.home_folders),
           ...folders.map((folder) => _buildFolderTile(folder)),
           const Divider(indent: 16, endIndent: 16),
         ],
@@ -476,20 +471,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium
-                    ?.copyWith(color: Colors.grey[500]),
+                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ),
           )
         else ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text(
-              l10n.home_books,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-            ),
-          ),
+          MysticSectionHeader(label: l10n.home_books),
           _buildEbookGrid(books),
         ],
       ],
@@ -506,7 +493,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
-        leading: const Icon(Icons.folder, color: Colors.amber, size: 32),
+        leading: Icon(Icons.folder_special_rounded, color: TT.accent(context), size: 32),
         title: Text(folder.name),
         subtitle: Text(l10n.home_booksCount(bookCount)),
         trailing: PopupMenuButton<String>(
@@ -563,7 +550,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 4,
-              backgroundColor: Colors.grey[200],
             ),
           ),
           const SizedBox(height: 2),
@@ -573,7 +559,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 : pos >= total - 1
                     ? l10n.home_finished
                     : l10n.home_percentReadSentence((progress * 100).round(), pos, total),
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
       ],
@@ -614,18 +600,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ).then((_) => setState(() {})),
       onLongPress: _isSelectionMode ? null : () => _enterSelectionMode(ebook.id),
       child: Card(
-        elevation: isSelected ? 0 : 2,
+        elevation: 0,
         margin: EdgeInsets.zero,
         clipBehavior: Clip.hardEdge,
         color: isSelected
-            ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
-            : null,
+            ? TT.accent(context).withOpacity(0.18)
+            : Theme.of(context).colorScheme.surfaceContainerHigh.withOpacity(0.8),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: isSelected
-              ? BorderSide(
-                  color: Theme.of(context).colorScheme.primary, width: 2)
-              : BorderSide.none,
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: isSelected
+                ? TT.accent(context)
+                : TT.accent(context).withOpacity(0.22),
+            width: isSelected ? 2 : 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -704,8 +692,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: LinearProgressIndicator(
                         value: progress,
                         minHeight: 3,
-                        backgroundColor: Colors.grey[200],
-                      ),
+                                ),
                     ),
                   if (total > 0) const SizedBox(height: 2),
                   Text(
@@ -714,7 +701,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         : pos >= total - 1
                             ? AppLocalizations.of(context)!.home_finished
                             : '${(progress * 100).round()}%',
-                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 10, color: TT.accent(context), fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -744,7 +731,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ebook.fileFormat == 'pdf'
                     ? Icons.picture_as_pdf
                     : Icons.import_contacts,
-                color: Colors.blue,
+                color: TT.accent(context),
               ),
         title: Text(ebook.title),
         subtitle: _buildProgressSubtitle(ebook),
@@ -829,27 +816,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildEmptyState() {
     final l10n = AppLocalizations.of(context)!;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.library_books, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            l10n.home_noBooks,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.home_addPrompt,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
+    return TomyEmptyState(title: l10n.home_noBooks, message: l10n.home_addPrompt);
   }
 
   @override
@@ -871,14 +838,15 @@ class BookCover extends StatelessWidget {
   // Couleur dérivée du titre pour varier les couvertures
   Color _baseColor() {
     final colors = [
-      const Color(0xFF1565C0), // bleu foncé
-      const Color(0xFF2E7D32), // vert foncé
-      const Color(0xFF6A1B9A), // violet
-      const Color(0xFFC62828), // rouge foncé
-      const Color(0xFFE65100), // orange foncé
-      const Color(0xFF00695C), // teal
-      const Color(0xFF283593), // indigo
-      const Color(0xFF4527A0), // deep purple
+      // Palette "Mystic night"
+      const Color(0xFF4A2896), // violet grimoire
+      const Color(0xFF2B1D6E), // indigo nuit
+      const Color(0xFF8E1530), // rouge signet
+      const Color(0xFF1F4E6B), // bleu crépuscule
+      const Color(0xFF5B2A7A), // prune
+      const Color(0xFF1E5A55), // vert sortilège
+      const Color(0xFF6B3A1E), // cuir ancien
+      const Color(0xFF3A2C8C), // améthyste
     ];
     final index = title.codeUnits.fold(0, (a, b) => a + b) % colors.length;
     return colors[index];
@@ -908,11 +876,21 @@ class BookCover extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [color, color.withOpacity(0.75)],
+          colors: [color, Color.lerp(color, Colors.black, 0.45)!],
         ),
       ),
       child: Stack(
         children: [
+          // Liseré doré façon reliure
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: TT.gold.withOpacity(0.45), width: 1),
+              ),
+            ),
+          ),
           // Grandes initiales en filigrane
           Positioned(
             bottom: -8,
@@ -951,8 +929,8 @@ class BookCover extends StatelessWidget {
           // Icône centrale
           Center(
             child: Icon(
-              isPdf ? Icons.picture_as_pdf_rounded : Icons.import_contacts_rounded,
-              color: Colors.white.withOpacity(0.6),
+              isPdf ? Icons.picture_as_pdf_rounded : Icons.auto_stories_rounded,
+              color: TT.goldLight.withOpacity(0.75),
               size: 32,
             ),
           ),

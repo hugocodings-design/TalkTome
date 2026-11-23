@@ -19,6 +19,7 @@ import 'services/llm_selftest.dart';
 import 'services/pc_boost_service.dart';
 import 'services/reading_theme.dart';
 import 'services/talktome_audio_handler.dart';
+import 'theme/talktome_theme.dart';
 
 // Préférences globales accessibles partout dans l'app
 final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(ThemeMode.system);
@@ -152,7 +153,7 @@ void main() async {
   final settings = await Hive.openBox('settings');
 
   // Restaurer les préférences sauvegardées
-  final savedTheme = settings.get('themeMode', defaultValue: 'system') as String;
+  final savedTheme = settings.get('themeMode', defaultValue: 'dark') as String;
   themeModeNotifier.value = _parseThemeMode(savedTheme);
   fontFamilyNotifier.value = settings.get('fontFamily') as String?;
   fontSizeNotifier.value = (settings.get('fontSize', defaultValue: 16.0) as num).toDouble();
@@ -304,20 +305,9 @@ class _TalkTomeAppState extends State<TalkTomeApp> {
             return MaterialApp(
               title: 'TalkTome',
               debugShowCheckedModeBanner: false,
-              theme: ThemeData(
-                useMaterial3: true,
-                colorScheme: ColorScheme.fromSeed(
-                  seedColor: Colors.blue,
-                  brightness: Brightness.light,
-                ),
-              ),
-              darkTheme: ThemeData(
-                useMaterial3: true,
-                colorScheme: ColorScheme.fromSeed(
-                  seedColor: Colors.blue,
-                  brightness: Brightness.dark,
-                ),
-              ),
+              // "Mystic night" — voir lib/theme/talktome_theme.dart
+              theme: buildTalkTomeTheme(Brightness.light),
+              darkTheme: buildTalkTomeTheme(Brightness.dark),
               themeMode: themeMode,
               locale: appLocale,
               // Français en premier : langue de repli si celle du téléphone

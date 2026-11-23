@@ -278,6 +278,48 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{1 mot} other{{count} mots}}'**
   String urlImport_words(int count);
 
+  /// No description provided for @tomy_greetMorning.
+  ///
+  /// In fr, this message translates to:
+  /// **'Bonjour !'**
+  String get tomy_greetMorning;
+
+  /// No description provided for @tomy_greetAfternoon.
+  ///
+  /// In fr, this message translates to:
+  /// **'Bon après-midi !'**
+  String get tomy_greetAfternoon;
+
+  /// No description provided for @tomy_greetEvening.
+  ///
+  /// In fr, this message translates to:
+  /// **'Bonsoir !'**
+  String get tomy_greetEvening;
+
+  /// No description provided for @tomy_greetNight.
+  ///
+  /// In fr, this message translates to:
+  /// **'Encore debout ?'**
+  String get tomy_greetNight;
+
+  /// No description provided for @tomy_continue.
+  ///
+  /// In fr, this message translates to:
+  /// **'On reprend « {title} » ? Je suis prêt à te le lire.'**
+  String tomy_continue(String title);
+
+  /// No description provided for @tomy_streak.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} jours d\'affilée, ne casse pas la série !'**
+  String tomy_streak(int count);
+
+  /// No description provided for @tomy_idle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Choisis un livre dans ta bibliothèque et je te le lis à voix haute.'**
+  String get tomy_idle;
+
   /// No description provided for @recentScreen_inProgress.
   ///
   /// In fr, this message translates to:

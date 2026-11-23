@@ -137,6 +137,32 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get tomy_greetMorning => 'Bonjour !';
+
+  @override
+  String get tomy_greetAfternoon => 'Bon après-midi !';
+
+  @override
+  String get tomy_greetEvening => 'Bonsoir !';
+
+  @override
+  String get tomy_greetNight => 'Encore debout ?';
+
+  @override
+  String tomy_continue(String title) {
+    return 'On reprend « $title » ? Je suis prêt à te le lire.';
+  }
+
+  @override
+  String tomy_streak(int count) {
+    return '$count jours d\'affilée, ne casse pas la série !';
+  }
+
+  @override
+  String get tomy_idle =>
+      'Choisis un livre dans ta bibliothèque et je te le lis à voix haute.';
+
+  @override
   String get recentScreen_inProgress => 'En cours';
 
   @override
