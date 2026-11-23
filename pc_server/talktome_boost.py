@@ -98,9 +98,59 @@ cfg = load_config()
 app = FastAPI(title='TalkTome Boost', version=str(VERSION))
 
 
+_last_use = 0.0  # dernière demande réussie d'un téléphone (time.monotonic)
+
+
 def check_token(token: str | None) -> None:
+    global _last_use
     if not token or not secrets.compare_digest(token, cfg['token']):
         raise HTTPException(status_code=401, detail='code incorrect')
+    _last_use = time.monotonic()
+
+
+# ── Connexion stable ─────────────────────────────────────────────────────────
+
+DISCOVER_ASK = b'TALKTOME_DISCOVER'
+KEEP_AWAKE_SECONDS = 10 * 60
+
+
+def discovery_responder() -> None:
+    """Répond aux téléphones qui cherchent l'ordinateur sur le Wi-Fi.
+
+    Le téléphone diffuse « TALKTOME_DISCOVER » sur le réseau local ; on lui
+    renvoie « TALKTOME_BOOST <port> ». Ainsi, si l'adresse de l'ordinateur
+    change (box qui en attribue une autre), le téléphone le retrouve seul.
+    Le code d'appairage reste exigé pour tout le reste.
+    """
+    import socket
+    port = int(cfg['port'])
+    while True:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('0.0.0.0', port))
+            log.info('découverte réseau active (UDP %s)', port)
+            while True:
+                data, addr = sock.recvfrom(256)
+                if data.strip() == DISCOVER_ASK:
+                    sock.sendto(f'TALKTOME_BOOST {port}'.encode(), addr)
+        except Exception:
+            log.exception('découverte réseau interrompue, relance dans 10 s')
+            time.sleep(10)
+
+
+def keep_awake() -> None:
+    """Empêche la mise en veille de Windows tant qu'un téléphone s'est servi
+    de l'ordinateur dans les 10 dernières minutes (sinon, veille normale)."""
+    if os.name != 'nt':
+        return
+    import ctypes
+    ES_SYSTEM_REQUIRED = 0x00000001
+    while True:
+        time.sleep(30)
+        if _last_use and time.monotonic() - _last_use < KEEP_AWAKE_SECONDS:
+            # Remet à zéro le compteur d'inactivité qui mène à la veille.
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_SYSTEM_REQUIRED)
 
 
 # ── Voix ─────────────────────────────────────────────────────────────────────
@@ -334,6 +384,8 @@ def main() -> None:
     if '--no-llm' not in sys.argv:  # --no-llm : voix seulement (tests)
         start_llama()
     start_qwen()
+    threading.Thread(target=discovery_responder, daemon=True).start()
+    threading.Thread(target=keep_awake, daemon=True).start()
     try:
         uvicorn.run(app, host='0.0.0.0', port=int(cfg['port']), log_level='warning',
                     log_config=None)

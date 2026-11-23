@@ -14,6 +14,13 @@ The script also starts it right away. Windows will ask about the firewall: allow
 
 **Already installed under the old name (`%LOCALAPPDATA%\SpeechifyBoost`)?** Run the same command: it stops the old server, moves the folder to `TalkTomeBoost` as is (Python environment, models and pairing code are kept, nothing is downloaded again) and replaces the startup shortcut. Windows asks about the firewall once more because the path changed.
 
+## Staying connected
+
+- **Auto-restart:** the startup shortcut runs `boost_supervisor.py`, which starts the server and restarts it 5 seconds after any crash (`supervisor.log`).
+- **The phone finds the PC by itself (Android):** if none of the saved addresses answer, the app asks the Wi-Fi network for TalkTome Boost (UDP broadcast on the Boost port) and saves the PC's new address. Handy when the router gives the PC a different address. The pairing code is still required.
+- **Firewall:** `install_boost.ps1` (run as administrator) allows the Boost port for TCP and UDP from the local network and Tailscale only, whatever network type Windows picked, and removes any old "block" rule for Boost's Python.
+- **Sleep:** the PC stays awake while a phone has used Boost in the last 10 minutes; otherwise Windows sleeps as usual. A sleeping or switched-off PC can't answer: the phone then uses its own voices.
+
 ## Qwen3-TTS voices (computer only, optional)
 
 18 extra voices (3 female + 3 male in English, French and European Portuguese) that only the PC can generate. In the app they are labelled **Qwen3 …** in sections marked **« ordinateur requis »**; they don't work with the phone alone.

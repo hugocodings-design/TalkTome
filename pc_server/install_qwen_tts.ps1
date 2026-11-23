@@ -45,7 +45,7 @@ if ($LASTEXITCODE -ne 0) { throw "La préparation de Qwen3-TTS a échoué : voir
 
 # Redémarre TalkTome Boost (il lance Qwen3-TTS au démarrage).
 Get-CimInstance Win32_Process | Where-Object {
-    $_.CommandLine -and ($_.CommandLine -like '*talktome_boost.py*' -or $_.CommandLine -like '*qwen_tts_worker.py*')
+    $_.CommandLine -and ($_.CommandLine -like '*talktome_boost.py*' -or $_.CommandLine -like '*qwen_tts_worker.py*' -or $_.CommandLine -like '*boost_supervisor.py*')
 } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Seconds 2
 Start-Process wscript.exe -ArgumentList "`"$(Join-Path $base 'start_boost.vbs')`"" -WorkingDirectory $base
