@@ -1669,6 +1669,18 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'~{size} Mo'**
   String voiceDownloads_sizeMb(int size);
+
+  /// No description provided for @voice_pcRequiredTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voix réservée à l\'ordinateur'**
+  String get voice_pcRequiredTitle;
+
+  /// No description provided for @voice_pcRequiredBody.
+  ///
+  /// In fr, this message translates to:
+  /// **'Cette voix (Qwen3-TTS) est générée par votre ordinateur avec TalkTome Boost, qui ne répond pas pour l\'instant. Allumez l\'ordinateur, vérifiez Profil → TalkTome Boost, ou choisissez une voix marquée « téléphone ».'**
+  String get voice_pcRequiredBody;
 }
 
 class _AppLocalizationsDelegate

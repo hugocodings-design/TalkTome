@@ -46,6 +46,8 @@ class VoiceModelDownloader {
     'pt-dii': 64,
     'pt-faber': 64,
     'pt-jeff': 64,
+    'supertonic3': 123,
+    'pocket': 95,
   };
 
   static String urlFor(SherpaModelSpec spec) =>
@@ -116,6 +118,13 @@ class VoiceModelDownloader {
       final extracted = Directory('$extractDir/${spec.folder}');
       if (!await File('${extracted.path}/${spec.modelFile}').exists()) {
         throw StateError('Archive incomplète : ${spec.modelFile} introuvable');
+      }
+      // Fichiers complémentaires (extraits de voix de Pocket TTS), rangés
+      // dans le dossier du modèle avant qu'il ne devienne visible.
+      for (final extra in spec.extraFiles.entries) {
+        final target = File('${extracted.path}/${extra.key}');
+        await target.parent.create(recursive: true);
+        await _dio.download(extra.value, target.path, cancelToken: cancel);
       }
       if (await finalDir.exists()) await finalDir.delete(recursive: true);
       await extracted.rename(finalDir.path);

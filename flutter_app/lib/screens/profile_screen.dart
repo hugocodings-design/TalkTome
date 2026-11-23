@@ -220,7 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<int> _installedVoiceModels() async {
     var count = 0;
-    for (final m in SherpaTtsService.models) {
+    for (final m in SherpaTtsService.models.where((m) => m.runsOnPhone)) {
       if (await SherpaTtsService.instance.isModelInstalled(m.id)) count++;
     }
     return count;
@@ -403,7 +403,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: Text(l10n.voiceDownloads_title),
             subtitle: snap.hasData
                 ? Text(l10n.voiceDownloads_tileSubtitle(
-                    snap.data!, SherpaTtsService.models.length))
+                    snap.data!,
+                    SherpaTtsService.models.where((m) => m.runsOnPhone).length))
                 : null,
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () async {

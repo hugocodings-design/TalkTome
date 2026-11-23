@@ -325,5 +325,7 @@
   "@voiceDownloads_deleteConfirm": {"placeholders": {"name": {"type": "String"}}},
   "voiceDownloads_cancel": "Annuler",
   "voiceDownloads_sizeMb": "~{size} Mo",
-  "@voiceDownloads_sizeMb": {"placeholders": {"size": {"type": "int"}}}
+  "@voiceDownloads_sizeMb": {"placeholders": {"size": {"type": "int"}}},
+  "voice_pcRequiredTitle": "Voix réservée à l'ordinateur",
+  "voice_pcRequiredBody": "Cette voix (Qwen3-TTS) est générée par votre ordinateur avec TalkTome Boost, qui ne répond pas pour l'instant. Allumez l'ordinateur, vérifiez Profil → TalkTome Boost, ou choisissez une voix marquée « téléphone »."
 }

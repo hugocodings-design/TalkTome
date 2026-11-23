@@ -49,3 +49,16 @@ Débogage sans fil : `adb pair <ip>:<port d'appairage>` (une fois), puis `adb co
 - TalkTome Boost fonctionne sur iPhone (exception ATS + description réseau local dans `Info.plist`). Quand le PC répond, toutes les voix sont proposées, même non installées.
 - L'IA Qwen intégrée (`packages/llama_flutter_android`) est Android uniquement : sur iPhone, le dictionnaire/traduction IA ne marche que via TalkTome Boost. Le dictionnaire Wiktionary hors ligne n'est pas encore téléchargeable.
 - Mise à jour sur le Mac : `git checkout ios && git pull`, `flutter pub get`, `cd ios && pod install && cd ..`, puis ▶ dans Xcode.
+
+## Voix (phase de développement)
+Chaque voix s'affiche « <moteur> <nom> ♀/♂ », dans une section « <langue> · <moteur> · téléphone | ordinateur requis » (`lib/data/voice_characters.dart`). Catalogue : `lib/services/sherpa_tts_service.dart` ; modèles téléchargeables depuis Profil → Voix IA.
+
+| Moteur | Où | Langues | Voix |
+|---|---|---|---|
+| Kokoro (fp32) | téléphone | EN 3F+3M, FR 1F, PT-BR 1F+2M | natives uniquement |
+| Supertonic 3 (int8) | téléphone | FR, EN, PT : 3F+3M chacune | F1–F3 = identifiants 0–2, M1–M3 = 5–7 ; langue passée par `extra: {'lang': …}` |
+| Pocket TTS (int8) | téléphone | EN 3F+3M | voix imitées d'extraits VCTK (`<modèle>/voices/*.wav`, téléchargés avec le modèle) |
+| Piper | téléphone | FR, PT | anciennes voix (Miro FR/PT, Dii et Tom interdits en usage commercial) |
+| Qwen3-TTS | **ordinateur uniquement** (TalkTome Boost) | FR, EN, PT-PT : 3F+3M chacune | décrites dans `pc_server/qwen_voices.json` (mêmes identifiants), créées par `install_qwen_tts.ps1` |
+
+Le serveur du PC ne fait tourner que Kokoro, Piper et Qwen3 ; Supertonic et Pocket restent toujours sur le téléphone.

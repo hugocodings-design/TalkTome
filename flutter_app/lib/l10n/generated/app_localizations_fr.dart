@@ -1008,4 +1008,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String voiceDownloads_sizeMb(int size) {
     return '~$size Mo';
   }
+
+  @override
+  String get voice_pcRequiredTitle => 'Voix réservée à l\'ordinateur';
+
+  @override
+  String get voice_pcRequiredBody =>
+      'Cette voix (Qwen3-TTS) est générée par votre ordinateur avec TalkTome Boost, qui ne répond pas pour l\'instant. Allumez l\'ordinateur, vérifiez Profil → TalkTome Boost, ou choisissez une voix marquée « téléphone ».';
 }

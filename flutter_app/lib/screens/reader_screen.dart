@@ -2619,9 +2619,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
     // Ordinateur joignable (TalkTome Boost) : il a toutes les voix, même
     // celles qui ne sont pas installées sur ce téléphone (iPhone…).
     final boostReady = await PcBoostService.instance.base() != null;
+    // Les voix réservées à l'ordinateur (Qwen3-TTS) restent toujours
+    // visibles, signalées comme telles : on sait ainsi lesquelles ne
+    // marchent pas avec le téléphone seul.
+    final installed = (await SherpaTtsService.instance.installedVoices())
+        .map((v) => v.name)
+        .toSet();
     final aiVoices = boostReady
         ? SherpaTtsService.voices
-        : await SherpaTtsService.instance.installedVoices();
+        : SherpaTtsService.voices
+            .where((v) =>
+                installed.contains(v.name) ||
+                !SherpaTtsService.modelById(v.modelId).runsOnPhone)
+            .toList();
     final voices = <Voice>[
       ...aiVoices.map((v) => Voice(
             name: v.name,
@@ -2791,9 +2801,33 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
-  void _changeVoice(String? newVoiceName) {
+  Future<void> _changeVoice(String? newVoiceName) async {
     if (newVoiceName == null) return;
     final voice = availableVoices.firstWhere((v) => v.name == newVoiceName);
+    // Voix de l'ordinateur alors que TalkTome Boost ne répond pas : on le
+    // dit plutôt que de laisser la lecture échouer.
+    final ai = SherpaTtsService.voiceByName(voice.name);
+    if (ai != null &&
+        !SherpaTtsService.modelById(ai.modelId).runsOnPhone &&
+        await PcBoostService.instance.base() == null) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.voice_pcRequiredTitle),
+          content: Text(l10n.voice_pcRequiredBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.common_close),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       selectedVoice = voice.name;
       selectedLanguageCode = voice.languageCode;
@@ -2846,8 +2880,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
             final character = characterForVoice(v.name);
             final isSelected = v.name == selectedVoice;
             return GestureDetector(
-              onTap: () {
-                _changeVoice(v.name);
+              onTap: () async {
+                await _changeVoice(v.name);
                 // Le panneau reste ouvert (pas de Navigator.pop) pour
                 // pouvoir essayer plusieurs voix d'affilée rapidement.
                 onSelected?.call();

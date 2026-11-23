@@ -15,6 +15,9 @@ class VoiceDownloadScreen extends StatefulWidget {
 }
 
 class _VoiceDownloadScreenState extends State<VoiceDownloadScreen> {
+  // Les modèles réservés à l'ordinateur (Qwen3-TTS) n'ont rien à installer.
+  static final _phoneModels =
+      SherpaTtsService.models.where((m) => m.runsOnPhone).toList();
   final _downloader = VoiceModelDownloader.instance;
   Map<String, bool> _installed = {};
 
@@ -45,7 +48,7 @@ class _VoiceDownloadScreenState extends State<VoiceDownloadScreen> {
 
   Future<void> _refreshInstalled() async {
     final result = <String, bool>{};
-    for (final m in SherpaTtsService.models) {
+    for (final m in _phoneModels) {
       result[m.id] = await SherpaTtsService.instance.isModelInstalled(m.id);
     }
     if (mounted) setState(() => _installed = result);
@@ -64,7 +67,7 @@ class _VoiceDownloadScreenState extends State<VoiceDownloadScreen> {
   }
 
   Future<void> _installAll() async {
-    for (final m in SherpaTtsService.models) {
+    for (final m in _phoneModels) {
       if (_installed[m.id] == true || _downloader.isBusy(m.id)) continue;
       await _downloader.install(m.id);
       if (!mounted) return;
@@ -168,7 +171,7 @@ class _VoiceDownloadScreenState extends State<VoiceDownloadScreen> {
     return ValueListenableBuilder<Map<String, VoiceDownloadState>>(
       valueListenable: _downloader.states,
       builder: (context, states, _) {
-        final missing = SherpaTtsService.models
+        final missing = _phoneModels
             .where((m) => _installed[m.id] != true && states[m.id] == null)
             .toList();
         final missingMb = missing.fold<int>(
@@ -191,7 +194,7 @@ class _VoiceDownloadScreenState extends State<VoiceDownloadScreen> {
                     label: Text(l10n.voiceDownloads_installAll(missingMb)),
                   ),
                 ),
-              for (final spec in SherpaTtsService.models)
+              for (final spec in _phoneModels)
                 ListTile(
                   isThreeLine: true,
                   title: Text(spec.label),
