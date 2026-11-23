@@ -3,9 +3,14 @@ import 'dart:convert';
 /// Humeur d'une phrase, pour la lecture expressive.
 enum Mood { neutral, happy, excited, sad, angry, scared, calm }
 
-/// Comment une humeur se traduit dans la voix. Kokoro / Piper n'ont pas de
-/// réglage d'émotion : on joue sur le rythme, le timbre, le volume et une
-/// pause après la phrase. Valeurs volontairement discrètes.
+/// Comment une humeur se traduit dans la voix. Les moteurs n'ont pas de
+/// réglage d'émotion : on joue sur le rythme (demandé au moteur lui-même,
+/// donc naturel), le volume et une pause après la phrase. Valeurs
+/// volontairement discrètes.
+///
+/// Pas de changement de timbre : décaler la hauteur après coup, phrase par
+/// phrase, donnait des voix bizarrement aiguës ou graves (« distorsion »).
+/// [pitchFactor] reste à 1,0 pour toutes les humeurs.
 class MoodProfile {
   const MoodProfile({
     this.speedFactor = 1.0,
@@ -24,12 +29,12 @@ class MoodProfile {
 
 const Map<Mood, MoodProfile> moodProfiles = {
   Mood.neutral: MoodProfile.neutral,
-  Mood.happy: MoodProfile(speedFactor: 1.04, pitchFactor: 1.04),
-  Mood.excited: MoodProfile(speedFactor: 1.10, pitchFactor: 1.06),
-  Mood.sad: MoodProfile(speedFactor: 0.88, pitchFactor: 0.95, volume: 0.85, pauseAfterMs: 350),
-  Mood.angry: MoodProfile(speedFactor: 1.06, pitchFactor: 0.97),
-  Mood.scared: MoodProfile(speedFactor: 1.08, pitchFactor: 1.05, volume: 0.9),
-  Mood.calm: MoodProfile(speedFactor: 0.93, pitchFactor: 0.98, volume: 0.85, pauseAfterMs: 200),
+  Mood.happy: MoodProfile(speedFactor: 1.04),
+  Mood.excited: MoodProfile(speedFactor: 1.08),
+  Mood.sad: MoodProfile(speedFactor: 0.90, volume: 0.85, pauseAfterMs: 350),
+  Mood.angry: MoodProfile(speedFactor: 1.05),
+  Mood.scared: MoodProfile(speedFactor: 1.06, volume: 0.9),
+  Mood.calm: MoodProfile(speedFactor: 0.94, volume: 0.85, pauseAfterMs: 200),
 };
 
 extension MoodVoice on Mood {

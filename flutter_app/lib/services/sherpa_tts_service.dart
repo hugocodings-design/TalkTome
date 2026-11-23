@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
+import 'audio_cleanup.dart';
 import 'pc_boost_service.dart';
 import 'word_aligner.dart';
 
@@ -970,28 +971,50 @@ void _workerMain(SendPort mainPort) {
         // Voix imitée à partir d'un court extrait, gardé en mémoire.
         final ref = references[msg['reference'] as String] ??=
             _readWavMono(msg['reference'] as String);
-        audio = tts!.generateWithConfig(
-          text: text,
-          config: sherpa.OfflineTtsGenerationConfig(
-            speed: speed,
-            referenceAudio: ref.$1,
-            referenceSampleRate: ref.$2,
-          ),
+        final prompt = pocketPrompt(text);
+        // Valeurs en texte : le moteur ignore les nombres dans « extra ».
+        final config = sherpa.OfflineTtsGenerationConfig(
+          speed: speed,
+          referenceAudio: ref.$1,
+          referenceSampleRate: ref.$2,
+          extra: {
+            'max_frames': '${prompt.maxFrames}',
+            'frames_after_eos': '${prompt.framesAfterEos}',
+          },
         );
+        // Pocket tire au sort : s'il touche le plafond (la phrase ne s'est pas
+        // terminée, bruit garanti), on recommence et on garde la plus courte.
+        final capSeconds = prompt.maxFrames / 12.5;
+        var best = tts!.generateWithConfig(text: prompt.text, config: config);
+        for (var attempt = 0; attempt < 2; attempt++) {
+          if (best.sampleRate <= 0 ||
+              best.samples.length / best.sampleRate < capSeconds * 0.9) {
+            break;
+          }
+          final again = tts!.generateWithConfig(text: prompt.text, config: config);
+          if (again.samples.isNotEmpty && again.samples.length < best.samples.length) {
+            best = again;
+          }
+        }
+        audio = best;
       } else {
         audio = tts!.generate(text: text, sid: sid, speed: speed);
       }
       if (audio.samples.isEmpty || audio.sampleRate <= 0) {
         throw Exception('Synthèse vide');
       }
+      // Silences du début et de la fin ramenés à une pause naturelle
+      // (Supertonic en ajoute près d'une seconde par phrase), et crêtes
+      // trop fortes adoucies (craquements).
+      final samples = limitPeaks(trimSilence(audio.samples, audio.sampleRate));
       File(msg['outPath'] as String)
-          .writeAsBytesSync(_wavBytes(audio.samples, audio.sampleRate));
-      final times = alignWordsToAudio(
-          msg['text'] as String, audio.samples, audio.sampleRate);
+          .writeAsBytesSync(_wavBytes(samples, audio.sampleRate));
+      final times =
+          alignWordsToAudio(msg['text'] as String, samples, audio.sampleRate);
       reply.send({
         'ok': true,
         'times': times,
-        'duration': audio.samples.length / audio.sampleRate,
+        'duration': samples.length / audio.sampleRate,
       });
     } catch (e) {
       reply.send({'ok': false, 'error': '$e'});
