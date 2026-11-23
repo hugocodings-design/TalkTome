@@ -37,6 +37,9 @@ LLM_MODEL = BASE / 'models' / 'llm' / 'qwen3-4b-instruct.gguf'
 LLAMA_EXE = BASE / 'llama' / 'llama-server.exe'
 CONFIG = BASE / 'config.json'
 LLAMA_PORT = 47816
+QWEN_PORT = 47817
+QWEN_PY = BASE / 'venv-qwen' / 'Scripts' / 'python.exe'
+QWEN_WORKER = BASE / 'qwen_tts_worker.py'
 VERSION = 1
 
 BASE.mkdir(parents=True, exist_ok=True)
@@ -103,9 +106,10 @@ def check_token(token: str | None) -> None:
 # ── Voix ─────────────────────────────────────────────────────────────────────
 
 class TtsRequest(BaseModel):
-    folder: str
-    kind: str          # 'kokoro' | 'piper'
-    modelFile: str
+    folder: str = ''
+    kind: str          # 'kokoro' | 'piper' | 'qwen3'
+    modelFile: str = ''
+    voice: str = ''    # qwen3 : identifiant de la voix (qwen_voices.json)
     sid: int = 0
     lang: str = ''
     gb: bool = False
@@ -177,6 +181,8 @@ def _wav(samples: np.ndarray, sr: int) -> bytes:
 @app.post('/tts')
 def tts(req: TtsRequest, x_boost_token: str | None = Header(default=None)):
     check_token(x_boost_token)
+    if req.kind == 'qwen3':
+        return _qwen_tts(req)
     t = time.perf_counter()
     with _tts_lock:
         eng = _engine(req)
@@ -187,6 +193,52 @@ def tts(req: TtsRequest, x_boost_token: str | None = Header(default=None)):
     log.info('tts %.1fs audio en %d ms', samples.size / audio.sample_rate,
              (time.perf_counter() - t) * 1000)
     return Response(content=_wav(samples, audio.sample_rate), media_type='audio/wav')
+
+
+# ── Voix Qwen3-TTS (programme séparé, voir qwen_tts_worker.py) ──────────────
+
+_qwen_proc: subprocess.Popen | None = None
+
+
+def _qwen_http_ok() -> bool:
+    try:
+        return httpx.get(f'http://127.0.0.1:{QWEN_PORT}/health', timeout=0.5).status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+def start_qwen() -> None:
+    global _qwen_proc
+    if _qwen_http_ok():
+        log.info('Qwen3-TTS déjà actif, réutilisé')
+        return
+    if not QWEN_PY.exists() or not QWEN_WORKER.exists():
+        log.info('Qwen3-TTS non installé (install_qwen_tts.ps1)')
+        return
+    _qwen_proc = subprocess.Popen(
+        [str(QWEN_PY), str(QWEN_WORKER)], cwd=str(BASE),
+        stdout=open(BASE / 'qwen_worker.log', 'ab'), stderr=subprocess.STDOUT,
+        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+    )
+    log.info('Qwen3-TTS démarré (pid %s)', _qwen_proc.pid)
+
+
+def _qwen_tts(req: TtsRequest) -> Response:
+    # 422 (et non 503) quand Qwen3-TTS manque : le téléphone ne doit pas en
+    # conclure que tout l'ordinateur est hors service.
+    if not _qwen_http_ok():
+        raise HTTPException(status_code=422, detail='Qwen3-TTS indisponible sur cet ordinateur')
+    t = time.perf_counter()
+    try:
+        r = httpx.post(f'http://127.0.0.1:{QWEN_PORT}/tts',
+                       json={'voice': req.voice, 'text': req.text, 'speed': req.speed},
+                       timeout=180)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=422, detail=f'Qwen3-TTS : {e}')
+    if r.status_code != 200:
+        raise HTTPException(status_code=422, detail=f'Qwen3-TTS : {r.text[:200]}')
+    log.info('qwen3 %s en %d ms', req.voice, (time.perf_counter() - t) * 1000)
+    return Response(content=r.content, media_type='audio/wav')
 
 
 # ── IA locale (Qwen via llama.cpp) ───────────────────────────────────────────
@@ -273,19 +325,22 @@ async def llm(req: LlmRequest, x_boost_token: str | None = Header(default=None))
 @app.get('/health')
 def health(x_boost_token: str | None = Header(default=None)):
     check_token(x_boost_token)
-    return {'ok': True, 'version': VERSION, 'tts': _provider, 'llm': llama_ready()}
+    return {'ok': True, 'version': VERSION, 'tts': _provider, 'llm': llama_ready(),
+            'qwen3': _qwen_http_ok()}
 
 
 def main() -> None:
     log.info('TalkTome Boost démarre — port %s, code %s', cfg['port'], cfg['token'])
     if '--no-llm' not in sys.argv:  # --no-llm : voix seulement (tests)
         start_llama()
+    start_qwen()
     try:
         uvicorn.run(app, host='0.0.0.0', port=int(cfg['port']), log_level='warning',
                     log_config=None)
     finally:
-        if _llama_proc and _llama_proc.poll() is None:
-            _llama_proc.terminate()
+        for proc in (_llama_proc, _qwen_proc):
+            if proc and proc.poll() is None:
+                proc.terminate()
 
 
 if __name__ == '__main__':
