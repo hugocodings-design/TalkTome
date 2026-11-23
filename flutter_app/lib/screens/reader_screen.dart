@@ -18,8 +18,8 @@ import '../services/local_llm_service.dart';
 import '../services/pc_boost_service.dart';
 import 'voice_download_screen.dart';
 import '../main.dart'
-    show themeModeNotifier, fontFamilyNotifier, fontSizeNotifier, dictionaryLanguageNotifier,
-        translationLanguageNotifier,
+    show themeModeNotifier, fontFamilyNotifier, fontSizeNotifier, readerMarginNotifier,
+        dictionaryLanguageNotifier, translationLanguageNotifier,
         audioHandler, ensureAudioHandler;
 import '../services/stats_service.dart';
 import '../data/voice_characters.dart';
@@ -2194,9 +2194,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
       valueListenable: fontSizeNotifier,
       builder: (context, fontSize, _) => ValueListenableBuilder<String?>(
         valueListenable: fontFamilyNotifier,
-        builder: (context, fontFamily, _) => LayoutBuilder(builder: (context, c) {
+        builder: (context, fontFamily, _) => ValueListenableBuilder<double>(
+          valueListenable: readerMarginNotifier,
+          builder: (context, readerMargin, _) => LayoutBuilder(builder: (context, c) {
           const footer = 28.0;
-          final area = Size(c.maxWidth, c.maxHeight - footer);
+          final usable = c.maxHeight - footer;
+          // Marge réglable (Profil > Texte) en haut et en bas de chaque page,
+          // plafonnée pour laisser au moins la moitié de la page au texte
+          // (paysage). Sans AppBar, on évite aussi la barre d'état.
+          final margin = readerMargin.clamp(0.0, usable / 4).toDouble();
+          final marginTop = margin + (_readerVisible ? 0.0 : MediaQuery.of(context).padding.top);
+          final marginBottom = margin;
+          // La pagination mesure dans `area` : y retirer les marges garde le
+          // découpage des pages exact, et un changement de marge change la
+          // clé ci-dessous, donc relance la pagination.
+          final area = Size(c.maxWidth, usable - marginTop - marginBottom);
           final scaler = MediaQuery.textScalerOf(context);
           final key =
               '${area.width.round()}x${area.height.round()}|$fontSize|$fontFamily|${scaler.scale(10)}';
@@ -2226,7 +2238,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     pageColor: Theme.of(context).scaffoldBackgroundColor,
                     onPageChanged: _onBookPageChanged,
                     itemBuilder: (context, i) => Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      padding: EdgeInsets.fromLTRB(16, 16 + marginTop, 16, marginBottom),
                       child: SingleChildScrollView(
                         physics: const NeverScrollableScrollPhysics(),
                         child: Column(
@@ -2278,6 +2290,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
             ),
           ]);
         }),
+        ),
       ),
     );
   }
@@ -4031,7 +4044,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   valueListenable: fontSizeNotifier,
                   builder: (context, fontSize, _) => ValueListenableBuilder<String?>(
                     valueListenable: fontFamilyNotifier,
-                    builder: (context, fontFamily, _) => NotificationListener<ScrollNotification>(
+                    builder: (context, fontFamily, _) => ValueListenableBuilder<double>(
+                    valueListenable: readerMarginNotifier,
+                    builder: (context, readerMargin, _) => NotificationListener<ScrollNotification>(
                   onNotification: _onScrollNotification,
                   child: ScrollablePositionedList.builder(
                   // scrollable_positioned_list mesure et met en cache la
@@ -4052,7 +4067,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   key: ValueKey('list_${fontSize}_$fontFamily'),
                   itemScrollController: _itemScrollController,
                   itemPositionsListener: _itemPositionsListener,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  // En mode "texte seul" (contrôles masqués via l'œil), on
+                  // laisse plus d'air en haut (zone de sécurité, pas
+                  // d'AppBar, + la marge réglable ci-dessous) et en bas
+                  // (au-dessus de la barre de progression réduite), pour
+                  // que le texte ne colle pas aux bords de l'écran. Réglage
+                  // dans Profil > Texte > "Marge en mode texte seul" —
+                  // toujours peint dans la couleur de fond du thème actuel
+                  // puisque c'est juste du padding sur le Scaffold.
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    _readerVisible ? 16 : MediaQuery.of(context).padding.top + readerMargin,
+                    16,
+                    _readerVisible ? 24 : readerMargin,
+                  ),
                   initialScrollIndex: _findDisplayIndex(_currentGlobalIndex).clamp(0, _displayItems.length - 1),
                   itemCount: _displayItems.length,
                   itemBuilder: (context, index) {
@@ -4069,6 +4097,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   ),
                     ),
                   ),
+                  ),
                 ),
 
                 // ── Bulle de traduction en direct ─────────────────────────
@@ -4077,7 +4106,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 // ── Bouton "Retour au texte en cours" ─────────────────────
                 if (_showReturnButton)
                   Positioned(
-                    bottom: 12 + (_readerVisible ? 0 : MediaQuery.of(context).padding.bottom),
+                    // La barre de progression reste toujours affichée en bas
+                    // (voir plus bas), donc le texte est toujours contraint
+                    // au-dessus d'elle : plus besoin de compenser la zone de
+                    // sécurité ici, que les contrôles soient visibles ou non.
+                    bottom: 12,
                     left: 0,
                     right: 0,
                     child: Center(
@@ -4133,7 +4166,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
 
           // ── Contrôles fixes en bas ───────────────────────────────────────
-          if (_readerVisible) Container(
+          // Toujours affiché, au moins pour la barre de progression + le
+          // chrono : même en mode "texte seul" (œil désactivé), on garde la
+          // progression du livre visible. Seuls les contrôles de lecture
+          // complets (voix, précédent/lecture/suivant, vitesse) se masquent
+          // avec _readerVisible, un peu plus bas.
+          Container(
             padding: EdgeInsets.fromLTRB(16, 10, 16, MediaQuery.of(context).padding.bottom + 14),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
@@ -4195,7 +4233,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
                   ),
                 ),
-                Row(
+                if (_readerVisible) Row(
                   children: [
                     // Sélecteur de voix : pastille circulaire, en bas à
                     // gauche, qui ouvre un panneau complet (la lecture

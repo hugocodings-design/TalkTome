@@ -1,5 +1,11 @@
 # TalkTome — lecteur de livres avec voix IA locales
 
+## Brand identity
+- **App name:** TalkTome ("a tome that talks" / "talk to me")
+- **Android package ID:** `com.hugocodings.talktome` (permanent once published on Google Play)
+- **Mascot:** Tomy — a thick purple grimoire with mystic runes, eyes and a mouth, wearing his red ribbon bookmark (signet) like a cape. Playful little hero; he's the one who will guide users through tutorials.
+- **Theme direction:** "Mystic night" — deep purple/indigo, soft gold accents, red reserved for the signet and key actions. Dark-first.
+
 ## Ce qu'est le projet
 Application Flutter (Android, iPhone) : on importe des livres (PDF, EPUB, pages web, pages scannées) et on les écoute lus par des voix IA. Tout fonctionne sur le téléphone, sans API payante :
 - **Voix IA** : sherpa-onnx (Kokoro, Piper), modèles dans `<support>/tts_models/<dossier>`.
@@ -20,7 +26,7 @@ TalkTome/
 ```
 
 ## Identifiant de l'app
-`com.hugo.talktome` (Android et iOS) depuis le 2026-11-20. L'ancienne app `com.example.speechify` est une app différente pour Android : ses données ont été recopiées dans la nouvelle avec `run-as` (les deux sont des builds debug).
+`com.hugocodings.talktome` (Android et iOS ; définitif une fois publié). L'ancienne app `com.example.speechify` est une app différente pour Android : ses données se recopient dans la nouvelle avec `run-as` (les deux sont des builds debug). Une app intermédiaire `com.hugo.talktome` (installée par erreur le 2026-11-23) est à désinstaller.
 
 ## Compiler et installer sur le téléphone Android (PowerShell)
 

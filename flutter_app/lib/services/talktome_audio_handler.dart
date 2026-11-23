@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:audio_service/audio_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show Locale;
 import '../l10n/generated/app_localizations.dart';
-import '../main.dart' show appLocaleNotifier;
+import '../main.dart' show appLocaleNotifier, expressiveReadingNotifier;
 import 'local_llm_service.dart';
+import 'sentence_mood.dart';
 import 'sherpa_tts_service.dart';
+import 'speech_text_normalizer.dart';
 import 'tts_audio_cache.dart';
+import 'wav_silence.dart';
 import '../models/word_timing.dart';
 
 /// Résout la langue actuelle de l'app (préférence utilisateur, sinon système,
@@ -104,6 +108,18 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
   bool _pumping = false;
   int _playToken = 0;
 
+  // ── Lecture expressive ────────────────────────────────────────────────────
+
+  /// Phrases demandées d'un coup à l'IA de l'ordinateur.
+  static const int _moodBatch = 12;
+
+  /// Humeur décidée pour chaque phrase de la session (IA ou règles).
+  final Map<int, Mood> _moods = {};
+
+  /// Après un échec de l'IA (ordinateur absent, trop lent), on s'en tient
+  /// aux règles jusqu'à cette heure-là.
+  DateTime _moodAiRetryAt = DateTime(0);
+
   // ── Suivi mot par mot ─────────────────────────────────────────────────────
 
   List<WordTiming> _currentWordTimings = [];
@@ -137,6 +153,15 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
         _onPlayerStateChanged(state);
       });
     }
+    expressiveReadingNotifier.addListener(_onExpressiveReadingChanged);
+  }
+
+  /// Option activée ou coupée : les phrases déjà préparées sont refaites
+  /// avec ou sans humeur ; celle qui joue va jusqu'au bout.
+  void _onExpressiveReadingChanged() {
+    if (!_isSessionActive) return;
+    _invalidatePipeline();
+    _kickPump();
   }
 
   void _onPlayerStateChanged(PlayerState state) {
@@ -271,16 +296,20 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
     _applyPlayerSpeeds();
   }
 
-  /// Vitesse et timbre d'un lecteur pour [clip].
+  /// Vitesse, timbre et volume d'un lecteur pour [clip] (humeur comprise :
+  /// sans lecture expressive, le profil neutre ne change rien).
   Future<void> _tune(AudioPlayer player, TtsClip clip) async {
-    await player.setSpeed(_speed / clip.speed);
-    await player.setPitch(_activePitch);
+    final mood = clip.mood;
+    await player.setSpeed(_speed * mood.speedFactor / clip.speed);
+    await player.setPitch((_activePitch * mood.pitchFactor).clamp(0.80, 1.20));
+    await player.setVolume(mood.volume);
   }
 
   void _invalidatePipeline() {
     _generation++;
     _ready.clear();
     _spoken.clear();
+    _moods.clear();
     _failed.clear();
     _bufferIndex = null;
     _bufferClip = null;
@@ -489,8 +518,8 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
       }
       // Ancienne vitesse : à refaire, sauf la phrase en cours et la suivante
       // (déjà chargées dans les lecteurs, le lecteur compense l'écart).
-      if (c.speed != _synthSpeed && i > _currentIndex + 1) return i;
-      if (i > _currentIndex) ahead += c.duration * c.speed / _speed;
+      if (c.baseSpeed != _synthSpeed && i > _currentIndex + 1) return i;
+      if (i > _currentIndex) ahead += c.duration * c.speed / (_speed * c.mood.speedFactor);
       if (ahead >= _targetSecondsAhead) return null;
     }
     return null;
@@ -528,9 +557,28 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
           if (gen != _generation) continue;
         }
 
+        // Ce que la voix prononce : mots allongés et fautes de frappe
+        // corrigés (un mot pour un mot, le surlignage reste aligné). _spoken
+        // garde, lui, le texte d'origine.
+        var toSpeak = text;
+        try {
+          toSpeak = await SpeechTextNormalizer.instance.normalize(text, _langOf(voice));
+        } catch (e) {
+          debugPrint('[TTS] nettoyage du texte impossible : $e');
+        }
+        var mood = Mood.neutral;
+        if (expressiveReadingNotifier.value) {
+          try {
+            mood = await _moodFor(index);
+          } catch (e) {
+            mood = MoodRules.classify(_sentenceTexts[index]);
+          }
+        }
+        if (gen != _generation) continue;
+
         TtsClip? clip;
         try {
-          clip = await _synthesize(text, voice, speed);
+          clip = await _synthesize(toSpeak, voice, speed, mood.profile);
         } catch (e) {
           debugPrint('[TTS] ⚠ synthèse phrase $index échouée : $e');
         }
@@ -572,28 +620,103 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
     });
   }
 
-  Future<TtsClip> _synthesize(String text, String voice, double speed) async {
+  /// [baseSpeed] : vitesse d'écoute choisie ; l'humeur la module à la
+  /// synthèse (le moteur parle naturellement plus vite ou plus lentement).
+  Future<TtsClip> _synthesize(
+      String text, String voice, double baseSpeed, MoodProfile mood) async {
+    final speed = _round(baseSpeed * mood.speedFactor);
+    final pauseMs = mood.pauseAfterMs;
     final cache = TtsAudioCache.instance;
-    final cached = await cache.get(voice, speed, text);
-    if (cached != null) return cached;
+    final cached = await cache.get(voice, speed, text, pauseMs: pauseMs);
+    if (cached != null) return cached.withMood(baseSpeed, mood);
     if (!SherpaTtsService.isSherpaVoice(voice)) {
       throw Exception('Voix non disponible : $voice');
     }
-    final path = await cache.wavPathFor(voice, speed, text);
+    final path = await cache.wavPathFor(voice, speed, text, pauseMs: pauseMs);
     final res = await SherpaTtsService.instance.synthesizeToFile(
       text: text,
       voiceName: voice,
       outPath: path,
       speed: speed,
     );
+    var duration = res.duration;
+    if (pauseMs > 0) {
+      try {
+        duration += await appendWavSilence(path, pauseMs);
+      } catch (e) {
+        debugPrint('[TTS] pause après la phrase impossible : $e');
+      }
+    }
     final clip = TtsClip(
       path: path,
       wordStarts: res.wordStarts,
-      duration: res.duration,
+      duration: duration,
       speed: speed,
+      baseSpeed: baseSpeed,
+      mood: mood,
     );
     await cache.put(clip);
     return clip;
+  }
+
+  /// Langue d'une voix, en code court (« fr », « en », « pt »).
+  String _langOf(String voice) =>
+      (SherpaTtsService.voiceByName(voice)?.languageCode ?? _languageCode)
+          .split('-')
+          .first
+          .toLowerCase();
+
+  /// Humeur de la phrase [index] : déjà connue, sinon l'IA de l'ordinateur
+  /// (par lots, avec un peu de contexte, mémorisée pour les prochaines
+  /// lectures), sinon des règles instantanées. Le téléphone n'utilise jamais
+  /// son IA pour ça : la voix devrait s'interrompre.
+  Future<Mood> _moodFor(int index) async {
+    final known = _moods[index];
+    if (known != null) return known;
+    final text = _sentenceTexts[index];
+    final lang = _langOf(_voiceName);
+    final box = Hive.box('mood_cache');
+    final cached = parseMood(box.get(moodCacheKey(lang, text)) as String?);
+    if (cached != null) return _moods[index] = cached;
+
+    if (DateTime.now().isAfter(_moodAiRetryAt)) {
+      final gen = _generation;
+      final end = math.min(index + _moodBatch, _sentenceTexts.length);
+      final batch = _sentenceTexts.sublist(index, end);
+      final context = _sentenceTexts.sublist(math.max(0, index - 2), index);
+      List<Mood?>? labels;
+      try {
+        labels = await LocalLlmService.instance
+            .classifyMoods(batch, context: context)
+            .timeout(const Duration(seconds: 4));
+      } catch (_) {
+        labels = null;
+      }
+      // Livre ou voix changé pendant la demande : ces index ne correspondent
+      // plus aux mêmes phrases (le cache disque, lui, reste juste).
+      if (gen != _generation) {
+        if (labels != null) {
+          for (var k = 0; k < labels.length; k++) {
+            final m = labels[k];
+            if (m != null) unawaited(box.put(moodCacheKey(lang, batch[k]), m.name));
+          }
+        }
+        return Mood.neutral;
+      }
+      if (labels == null) {
+        _moodAiRetryAt = DateTime.now().add(const Duration(minutes: 1));
+      } else {
+        for (var k = 0; k < labels.length; k++) {
+          final m = labels[k];
+          if (m == null) continue;
+          _moods[index + k] = m;
+          unawaited(box.put(moodCacheKey(lang, batch[k]), m.name));
+        }
+        final fromAi = _moods[index];
+        if (fromAi != null) return fromAi;
+      }
+    }
+    return _moods[index] = MoodRules.classify(text);
   }
 
   // ── Suivi mot par mot ─────────────────────────────────────────────────────

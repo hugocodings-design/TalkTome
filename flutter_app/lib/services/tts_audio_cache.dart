@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'sentence_mood.dart';
+
 /// Phrase synthétisée, prête à jouer.
 class TtsClip {
   const TtsClip({
@@ -12,7 +14,9 @@ class TtsClip {
     required this.wordStarts,
     required this.duration,
     required this.speed,
-  });
+    double? baseSpeed,
+    this.mood = MoodProfile.neutral,
+  }) : baseSpeed = baseSpeed ?? speed;
 
   final String path;
 
@@ -22,8 +26,23 @@ class TtsClip {
   /// Durée de l'audio (secondes), à la vitesse où il a été synthétisé.
   final double duration;
 
-  /// Vitesse à laquelle l'audio a été synthétisé.
+  /// Vitesse à laquelle l'audio a été synthétisé (humeur comprise).
   final double speed;
+
+  /// Vitesse d'écoute demandée au moment de la synthèse, sans l'humeur.
+  final double baseSpeed;
+
+  /// Humeur appliquée (lecture expressive) ; neutre sinon.
+  final MoodProfile mood;
+
+  TtsClip withMood(double baseSpeed, MoodProfile mood) => TtsClip(
+        path: path,
+        wordStarts: wordStarts,
+        duration: duration,
+        speed: speed,
+        baseSpeed: baseSpeed,
+        mood: mood,
+      );
 }
 
 /// Cache disque des phrases déjà synthétisées, BORNÉ : il ne dépasse jamais
@@ -62,10 +81,12 @@ class TtsAudioCache {
     return dir;
   }
 
-  /// FNV-1a 64 bits : nom de fichier stable pour (voix, vitesse, texte).
-  static String _key(String voice, double speed, String text) {
+  /// FNV-1a 64 bits : nom de fichier stable pour (voix, vitesse, texte, et
+  /// silence ajouté après la phrase s'il y en a un).
+  static String _key(String voice, double speed, String text, int pauseMs) {
     var h = 0xcbf29ce484222325;
-    for (final c in utf8.encode('$voice|${speed.toStringAsFixed(2)}|$text')) {
+    final pause = pauseMs > 0 ? '|p$pauseMs' : '';
+    for (final c in utf8.encode('$voice|${speed.toStringAsFixed(2)}|$text$pause')) {
       h ^= c;
       h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
     }
@@ -73,11 +94,11 @@ class TtsAudioCache {
   }
 
   /// Chemin où écrire le WAV d'une nouvelle synthèse.
-  Future<String> wavPathFor(String voice, double speed, String text) async =>
-      '${(await _directory()).path}/${_key(voice, speed, text)}.wav';
+  Future<String> wavPathFor(String voice, double speed, String text, {int pauseMs = 0}) async =>
+      '${(await _directory()).path}/${_key(voice, speed, text, pauseMs)}.wav';
 
-  Future<TtsClip?> get(String voice, double speed, String text) async {
-    final base = '${(await _directory()).path}/${_key(voice, speed, text)}';
+  Future<TtsClip?> get(String voice, double speed, String text, {int pauseMs = 0}) async {
+    final base = '${(await _directory()).path}/${_key(voice, speed, text, pauseMs)}';
     final wav = File('$base.wav');
     final meta = File('$base.json');
     try {

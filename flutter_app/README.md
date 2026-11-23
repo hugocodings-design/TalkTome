@@ -1,6 +1,6 @@
-# talktome
+# TalkTome
 
-A new Flutter project.
+Flutter app for TalkTome — an ebook reader that reads books aloud with text-to-speech.
 
 ## Getting Started
 

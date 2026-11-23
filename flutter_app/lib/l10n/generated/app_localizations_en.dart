@@ -517,6 +517,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileScreen_appearance => 'Appearance';
 
   @override
+  String get profileScreen_expressiveReading => 'Expressive reading';
+
+  @override
+  String get profileScreen_expressiveReadingHint =>
+      'The voice adapts its pace, tone and pauses to each sentence\'s emotion (analyzed by your computer\'s AI when TalkTome Boost is connected)';
+
+  @override
   String get profileScreen_system => 'System';
 
   @override
@@ -538,6 +545,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileScreen_font => 'Font';
+
+  @override
+  String get profileScreen_readerMargin => 'Text margins';
+
+  @override
+  String get profileScreen_readerMarginHint =>
+      'Space above and below the text in book mode, and when you hide the player (the eye icon)';
 
   @override
   String get profileScreen_default => 'Default';

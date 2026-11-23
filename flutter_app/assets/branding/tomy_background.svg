@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- "Mystic night" background layer of the TalkTome adaptive launcher icon. -->
+  <defs>
+    <radialGradient id="night" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#3D2A8C"/>
+      <stop offset="0.6" stop-color="#22165A"/>
+      <stop offset="1" stop-color="#120B2E"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#night)"/>
+  <g fill="#FFE7A8">
+    <circle cx="210" cy="250" r="5" opacity="0.8"/>
+    <circle cx="820" cy="210" r="4" opacity="0.7"/>
+    <circle cx="860" cy="700" r="5" opacity="0.6"/>
+    <circle cx="170" cy="720" r="4" opacity="0.6"/>
+    <circle cx="300" cy="860" r="3" opacity="0.5"/>
+    <circle cx="700" cy="860" r="4" opacity="0.5"/>
+    <circle cx="512" cy="150" r="3" opacity="0.6"/>
+  </g>
+</svg>

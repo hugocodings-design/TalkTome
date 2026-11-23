@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:path_provider/path_provider.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'models/ebook.dart';
 import 'models/chapter.dart';
@@ -24,6 +24,15 @@ import 'services/talktome_audio_handler.dart';
 final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(ThemeMode.system);
 final ValueNotifier<String?> fontFamilyNotifier = ValueNotifier(null);
 final ValueNotifier<double> fontSizeNotifier = ValueNotifier(16.0);
+
+/// Marge (en px) au-dessus et au-dessous du texte en mode livre, et en
+/// défilement quand on masque le lecteur avec l'œil — réglable dans Profil >
+/// Texte. Simple padding : prend la couleur du thème de lecture choisi.
+final ValueNotifier<double> readerMarginNotifier = ValueNotifier(32.0);
+
+/// Lecture expressive (Profil > Apparence) : la voix adapte rythme, timbre,
+/// volume et pauses à l'humeur de chaque phrase.
+final ValueNotifier<bool> expressiveReadingNotifier = ValueNotifier(false);
 
 /// Langue dans laquelle Gemini rédige les définitions du dictionnaire.
 /// Code court ISO ('fr', 'en', 'pt', 'es') et non une locale complète comme
@@ -60,7 +69,7 @@ Future<void> ensureAudioHandler() async {
     audioHandler = await AudioService.init(
       builder: () => TalkTomeAudioHandler(),
       config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.hugo.talktome.audio',
+        androidNotificationChannelId: 'com.hugocodings.talktome.audio',
         androidNotificationChannelName: 'TalkTome',
         androidNotificationIcon: 'drawable/ic_notification',
         androidStopForegroundOnPause: false,
@@ -114,8 +123,8 @@ void main() async {
 
   // Ouvrir les boxes persistantes
   await Hive.openBox<Folder>('folders');
-  await Hive.openBox<Ebook>('ebooks');
-  await _rebaseCoverPaths();
+  final ebookBox = await Hive.openBox<Ebook>('ebooks');
+  await _repairCoverPaths(ebookBox);
   final annotationBox = await Hive.openBox<Annotation>('annotations');
   await _cleanupAnnotationArtifacts(annotationBox);
   await Hive.openBox('reading_stats');
@@ -138,6 +147,8 @@ void main() async {
   // l'utilisateur (bouton "Traduire" dans la barre de sélection) — voir
   // TranslationEntry. Distincte de translation_cache ci-dessus.
   await _openBoxOrResetIfCorrupt<TranslationEntry>('translations');
+  // Humeur de chaque phrase déjà analysée par l'IA (lecture expressive).
+  await _openBoxOrResetIfCorrupt('mood_cache');
   final settings = await Hive.openBox('settings');
 
   // Restaurer les préférences sauvegardées
@@ -145,6 +156,10 @@ void main() async {
   themeModeNotifier.value = _parseThemeMode(savedTheme);
   fontFamilyNotifier.value = settings.get('fontFamily') as String?;
   fontSizeNotifier.value = (settings.get('fontSize', defaultValue: 16.0) as num).toDouble();
+  readerMarginNotifier.value =
+      (settings.get('readerMargin', defaultValue: 32.0) as num).toDouble();
+  expressiveReadingNotifier.value =
+      settings.get('expressiveReading', defaultValue: false) as bool;
   dictionaryLanguageNotifier.value =
       settings.get('dictionaryLanguage', defaultValue: 'fr') as String;
   translationLanguageNotifier.value =
@@ -167,6 +182,23 @@ void main() async {
   // Debug uniquement, et seulement si un fichier déclencheur a été déposé
   // via adb — voir llm_selftest.dart.
   unawaited(runLlmSelfTestIfRequested());
+}
+
+/// Les couvertures sont enregistrées avec un chemin absolu, qui contient
+/// l'identifiant du paquet Android : après une copie des données depuis une
+/// installation sous un autre identifiant, on les rattache au dossier covers/
+/// actuel quand le fichier s'y trouve. Sans effet une fois les chemins bons.
+Future<void> _repairCoverPaths(Box<Ebook> box) async {
+  final coversDir = '${(await getApplicationDocumentsDirectory()).path}/covers';
+  for (final key in box.keys.toList()) {
+    final ebook = box.get(key);
+    final path = ebook?.coverImagePath;
+    if (ebook == null || path == null || File(path).existsSync()) continue;
+    final relocated = '$coversDir/${path.split('/').last}';
+    if (!File(relocated).existsSync()) continue;
+    ebook.coverImagePath = relocated;
+    await box.put(key, ebook);
+  }
 }
 
 /// Ouvre une box Hive, et si sa lecture échoue (typiquement un
@@ -302,28 +334,5 @@ class _TalkTomeAppState extends State<TalkTomeApp> {
         );
       },
     );
-  }
-}
-
-/// Les couvertures sont enregistrées avec leur chemin complet, qui contient
-/// l'identifiant de l'app. Après un changement d'identifiant (ancienne app
-/// copiée dans la nouvelle), on recale ces chemins sur le dossier actuel.
-Future<void> _rebaseCoverPaths() async {
-  try {
-    final docs = (await getApplicationDocumentsDirectory()).path;
-    final box = Hive.box<Ebook>('ebooks');
-    for (final ebook in box.values.toList()) {
-      final path = ebook.coverImagePath;
-      if (path == null || await File(path).exists()) continue;
-      final i = path.indexOf('/covers/');
-      if (i < 0) continue;
-      final moved = '$docs${path.substring(i)}';
-      if (await File(moved).exists()) {
-        ebook.coverImagePath = moved;
-        await box.put(ebook.id, ebook);
-      }
-    }
-  } catch (e) {
-    debugPrint('Recalage des couvertures impossible : $e');
   }
 }

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.hugo.talktome"
+    namespace = "com.hugocodings.talktome"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.hugo.talktome"
+        applicationId = "com.hugocodings.talktome"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // 26 (Android 8) : exigé par le moteur d'IA locale (llama.cpp).

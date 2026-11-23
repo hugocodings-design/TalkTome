@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Tomy: TalkTome mascot. Foreground layer of the adaptive launcher icon (transparent background). -->
+  <defs>
+    <linearGradient id="cape" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E0384F"/>
+      <stop offset="1" stop-color="#8E1530"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8A5CE0"/>
+      <stop offset="1" stop-color="#4A2896"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE29A"/>
+      <stop offset="1" stop-color="#E0A93B"/>
+    </linearGradient>
+    <clipPath id="coverClip">
+      <rect x="330" y="276" width="340" height="456" rx="40"/>
+    </clipPath>
+    <clipPath id="mouthClip">
+      <path d="M448 532 Q518 648 592 532 Q520 556 448 532 Z"/>
+    </clipPath>
+  </defs>
+
+  <g transform="translate(512 520) scale(0.9) translate(-512 -520)">
+    <!-- Red ribbon cape, flowing behind the book -->
+    <path d="M410 318 C310 420 250 610 236 788 Q320 752 392 800 Q462 758 512 812 Q562 758 632 800 Q704 752 788 788 C774 610 714 420 614 318 Z" fill="url(#cape)"/>
+    <path d="M512 330 Q500 560 512 812 Q524 560 512 330 Z" fill="#7A0F27" opacity="0.35"/>
+
+    <!-- Back cover and page block (book thickness) -->
+    <rect x="394" y="304" width="332" height="452" rx="38" fill="#2E1766"/>
+    <rect x="374" y="294" width="332" height="446" rx="30" fill="#F4E7C6"/>
+    <g stroke="#D9C69B" stroke-width="5" fill="none">
+      <path d="M690 330 V712"/>
+      <path d="M676 322 V722"/>
+    </g>
+
+    <!-- Front cover -->
+    <rect x="330" y="276" width="340" height="456" rx="40" fill="url(#cover)"/>
+    <g clip-path="url(#coverClip)">
+      <!-- spine -->
+      <rect x="330" y="276" width="58" height="456" fill="#36197A"/>
+      <rect x="330" y="340" width="58" height="14" fill="url(#gold)"/>
+      <rect x="330" y="654" width="58" height="14" fill="url(#gold)"/>
+      <!-- gold corner protectors -->
+      <path d="M670 276 V352 Q640 300 594 276 Z" fill="url(#gold)"/>
+      <path d="M670 732 V656 Q640 708 594 732 Z" fill="url(#gold)"/>
+      <!-- soft sheen -->
+      <path d="M388 276 H520 Q430 380 388 500 Z" fill="#FFFFFF" opacity="0.08"/>
+    </g>
+    <!-- inner gold border -->
+    <rect x="404" y="304" width="238" height="400" rx="22" fill="none" stroke="#F2C766" stroke-width="5" opacity="0.7"/>
+
+    <!-- Mystic runes along the bottom of the cover -->
+    <g stroke="#FFD97A" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M444 690 V650 M444 662 L462 650 M444 676 L462 664"/>
+      <path d="M502 690 V650 M502 666 L488 650 M502 666 L516 650"/>
+      <path d="M550 648 L563 662 L550 676 L537 662 Z M550 676 L538 692 M550 676 L562 692"/>
+      <path d="M588 650 V690 M614 650 V690 M588 650 L614 690 M614 650 L588 690"/>
+    </g>
+
+    <!-- Brows -->
+    <path d="M414 372 Q448 350 482 368" stroke="#24103A" stroke-width="10" stroke-linecap="round" fill="none"/>
+    <path d="M546 368 Q580 350 614 372" stroke="#24103A" stroke-width="10" stroke-linecap="round" fill="none"/>
+
+    <!-- Eyes -->
+    <ellipse cx="450" cy="438" rx="44" ry="52" fill="#FFFFFF"/>
+    <ellipse cx="580" cy="438" rx="44" ry="52" fill="#FFFFFF"/>
+    <circle cx="460" cy="448" r="25" fill="#1B1033"/>
+    <circle cx="590" cy="448" r="25" fill="#1B1033"/>
+    <circle cx="469" cy="437" r="9" fill="#FFFFFF"/>
+    <circle cx="599" cy="437" r="9" fill="#FFFFFF"/>
+
+    <!-- Cheeks -->
+    <ellipse cx="420" cy="516" rx="24" ry="14" fill="#FF7FA8" opacity="0.45"/>
+    <ellipse cx="612" cy="516" rx="24" ry="14" fill="#FF7FA8" opacity="0.45"/>
+
+    <!-- Mouth: a happy, talking smile -->
+    <path d="M448 532 Q518 648 592 532 Q520 556 448 532 Z" fill="#24103A"/>
+    <g clip-path="url(#mouthClip)">
+      <ellipse cx="522" cy="604" rx="46" ry="36" fill="#E8566C"/>
+    </g>
+
+    <!-- Ribbon collar and gold clasp tying the cape -->
+    <path d="M396 270 Q512 248 628 270 L632 294 Q512 274 392 294 Z" fill="#C8283C"/>
+    <path d="M392 294 Q370 300 366 322 L392 304 Z M632 294 Q654 300 658 322 L632 304 Z" fill="#A81F36"/>
+    <circle cx="512" cy="268" r="24" fill="url(#gold)" stroke="#B9822A" stroke-width="4"/>
+    <path d="M503 268 L512 255 L521 268 L512 281 Z" fill="#C8283C"/>
+  </g>
+
+  <!-- Gold sparkles -->
+  <g fill="#FFD97A">
+    <path d="M286 336 L294 358 L316 366 L294 374 L286 396 L278 374 L256 366 L278 358 Z"/>
+    <path d="M748 300 L754 316 L770 322 L754 328 L748 344 L742 328 L726 322 L742 316 Z"/>
+    <path d="M766 560 L771 573 L784 578 L771 583 L766 596 L761 583 L748 578 L761 573 Z"/>
+  </g>
+</svg>

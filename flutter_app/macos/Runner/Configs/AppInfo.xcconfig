@@ -8,7 +8,7 @@
 PRODUCT_NAME = talktome
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.hugo.talktome
+PRODUCT_BUNDLE_IDENTIFIER = com.hugocodings.talktome
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Hugo codings. All rights reserved.

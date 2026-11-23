@@ -3,8 +3,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart' as intl;
 import '../l10n/generated/app_localizations.dart';
 import '../main.dart'
-    show themeModeNotifier, fontFamilyNotifier, fontSizeNotifier, dictionaryLanguageNotifier,
-        translationLanguageNotifier, appLocaleNotifier;
+    show themeModeNotifier, fontFamilyNotifier, fontSizeNotifier, readerMarginNotifier,
+        expressiveReadingNotifier, dictionaryLanguageNotifier, translationLanguageNotifier,
+        appLocaleNotifier;
 import '../services/sherpa_tts_service.dart';
 import '../services/stats_service.dart';
 import 'voice_download_screen.dart';
@@ -49,6 +50,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _setFontFamily(String? family) {
     fontFamilyNotifier.value = family;
     Hive.box('settings').put('fontFamily', family);
+  }
+
+  void _setReaderMargin(double margin) {
+    readerMarginNotifier.value = margin;
+    Hive.box('settings').put('readerMargin', margin);
+  }
+
+  void _setExpressiveReading(bool enabled) {
+    expressiveReadingNotifier.value = enabled;
+    Hive.box('settings').put('expressiveReading', enabled);
   }
 
   void _setDictionaryLanguage(String code) {
@@ -263,6 +274,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
 
+        ValueListenableBuilder<bool>(
+          valueListenable: expressiveReadingNotifier,
+          builder: (context, enabled, _) => SwitchListTile(
+            secondary: const Icon(Icons.mood_rounded),
+            title: Text(l10n.profileScreen_expressiveReading),
+            subtitle: Text(l10n.profileScreen_expressiveReadingHint),
+            value: enabled,
+            onChanged: _setExpressiveReading,
+          ),
+        ),
+
         const Divider(),
 
         // ── Texte ────────────────────────────────────────────────────────
@@ -322,6 +344,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
               onChanged: _setFontFamily,
             ),
+          ),
+        ),
+
+        ValueListenableBuilder<double>(
+          valueListenable: readerMarginNotifier,
+          builder: (context, margin, _) => Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.vertical_align_center_rounded),
+                title: Text(l10n.profileScreen_readerMargin),
+                subtitle: Text(l10n.profileScreen_readerMarginHint),
+                trailing: Text(
+                  '${margin.toInt()} px',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Slider(
+                  value: margin,
+                  min: 0,
+                  max: 120,
+                  divisions: 12,
+                  onChanged: _setReaderMargin,
+                ),
+              ),
+            ],
           ),
         ),
 

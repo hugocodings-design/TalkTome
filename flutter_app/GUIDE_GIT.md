@@ -4,7 +4,7 @@ Git garde un historique de chaque version de votre code. Vous pouvez toujours re
 
 Toutes les commandes ci-dessous s'exécutent dans un terminal PowerShell, après :
 ```powershell
-cd "c:\Users\Hdasi\Desktop\PROJETS VISUAL CODE\TalkTome"
+cd "C:\chemin\vers\votre\dossier\de\projet"
 ```
 
 ## 1. Voir ce qui a changé

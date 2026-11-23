@@ -6,6 +6,7 @@ import 'package:llama_flutter_android/llama_flutter_android.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'pc_boost_service.dart';
+import 'sentence_mood.dart';
 
 /// IA locale (Qwen 3 4B Instruct, via llama.cpp) pour le dictionnaire et la
 /// traduction d'un passage : tout se passe sur le téléphone, sans réseau ni
@@ -341,6 +342,56 @@ class LocalLlmService {
       out += piece;
       yield out.trimLeft();
     }
+  }
+
+  // ── Humeur des phrases (lecture expressive) ──────────────────────────────
+
+  static const String _moodSystem =
+      'You label the emotional tone of sentences from a book, for an expressive '
+      'text-to-speech narrator. Labels: neutral, happy, excited, sad, angry, '
+      'scared, calm. Use neutral unless the emotion is clear. Answer with exactly '
+      'one line per numbered sentence, in the form "<number>: <label>", and '
+      'nothing else.';
+
+  /// Humeur de chaque phrase de [sentences] (null si illisible), ou null si
+  /// l'ordinateur (TalkTome Boost) n'est pas joignable. Jamais sur le
+  /// téléphone : ce serait trop lent et la voix devrait s'interrompre.
+  Future<List<Mood?>?> classifyMoods(List<String> sentences,
+      {List<String> context = const []}) async {
+    final boost = PcBoostService.instance;
+    if (sentences.isEmpty || !await boost.llmAvailable()) return null;
+    String oneLine(String s) {
+      final t = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+      return t.length > 300 ? t.substring(0, 300) : t;
+    }
+
+    final user = StringBuffer();
+    if (context.isNotEmpty) {
+      user.writeln('Preceding text (do not label):');
+      for (final c in context) {
+        user.writeln(oneLine(c));
+      }
+      user.writeln();
+    }
+    user.writeln('Sentences:');
+    for (var i = 0; i < sentences.length; i++) {
+      user.writeln('${i + 1}. ${oneLine(sentences[i])}');
+    }
+    final prompt = '<|im_start|>system\n$_moodSystem<|im_end|>\n'
+        '<|im_start|>user\n$user<|im_end|>\n'
+        '<|im_start|>assistant\n';
+
+    final answer = StringBuffer();
+    try {
+      await for (final piece in boost.generate(
+          prompt: prompt, maxTokens: 6 * sentences.length + 8, temperature: 0.1)) {
+        answer.write(piece);
+      }
+    } catch (e) {
+      debugPrint('[LOCAL-LLM] humeurs indisponibles : $e');
+      return null;
+    }
+    return parseMoodLines(answer.toString(), sentences.length);
   }
 }
 

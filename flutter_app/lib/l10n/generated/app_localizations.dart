@@ -872,6 +872,18 @@ abstract class AppLocalizations {
   /// **'Apparence'**
   String get profileScreen_appearance;
 
+  /// No description provided for @profileScreen_expressiveReading.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lecture expressive'**
+  String get profileScreen_expressiveReading;
+
+  /// No description provided for @profileScreen_expressiveReadingHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'La voix adapte son rythme, son ton et ses pauses à l\'émotion de chaque phrase (analyse par l\'IA de l\'ordinateur quand TalkTome Boost est connecté)'**
+  String get profileScreen_expressiveReadingHint;
+
   /// No description provided for @profileScreen_system.
   ///
   /// In fr, this message translates to:
@@ -913,6 +925,18 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Police'**
   String get profileScreen_font;
+
+  /// No description provided for @profileScreen_readerMargin.
+  ///
+  /// In fr, this message translates to:
+  /// **'Marges du texte'**
+  String get profileScreen_readerMargin;
+
+  /// No description provided for @profileScreen_readerMarginHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Espace au-dessus et au-dessous du texte en mode livre, et quand on masque le lecteur (l\'œil)'**
+  String get profileScreen_readerMarginHint;
 
   /// No description provided for @profileScreen_default.
   ///

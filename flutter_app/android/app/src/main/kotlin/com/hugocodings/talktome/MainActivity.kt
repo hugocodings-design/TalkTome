@@ -1,4 +1,4 @@
-package com.hugo.talktome
+package com.hugocodings.talktome
 
 import com.ryanheise.audioservice.AudioServiceActivity
 

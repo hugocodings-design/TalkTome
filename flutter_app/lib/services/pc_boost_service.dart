@@ -104,7 +104,8 @@ class PcBoostService {
   /// Base URL de l'ordinateur s'il répond, sinon null. Résultat gardé en
   /// mémoire 60 s (succès) ou 20 s (échec) pour ne pas ralentir l'app.
   Future<String?> base({bool force = false}) {
-    if (!enabled || code.isEmpty || hosts.isEmpty) {
+    // Sans adresse saisie, la recherche automatique sur le Wi-Fi suffit.
+    if (!enabled || code.isEmpty) {
       status.value = PcBoostStatus.off;
       return Future.value(null);
     }
@@ -118,28 +119,91 @@ class PcBoostService {
 
   /// Interroge toutes les adresses en même temps : la première qui répond
   /// gagne (le Wi-Fi de la maison répond presque toujours avant Tailscale).
+  /// Si aucune ne répond, cherche l'ordinateur sur le Wi-Fi : son adresse a
+  /// pu changer (la box en attribue parfois une autre).
   Future<String?> _probe() async {
     status.value = PcBoostStatus.searching;
-    final list = hosts;
-    final done = Completer<String?>();
+    var found = await _firstResponding(hosts);
+    if (found == null) {
+      final discovered = await _discover();
+      if (discovered != null) {
+        found = discovered;
+        await _rememberHost(discovered.$1);
+      }
+    }
+    if (found == null) {
+      markFailed();
+      return null;
+    }
+    final (host, b, llm) = found;
+    _base = b;
+    _checkedAt = DateTime.now();
+    activeHost.value = host;
+    _llmReady = llm;
+    status.value = PcBoostStatus.connected;
+    return b;
+  }
+
+  /// (adresse, base URL, IA prête) de la première adresse qui répond.
+  Future<(String, String, bool)?> _firstResponding(List<String> list) {
+    if (list.isEmpty) return Future.value(null);
+    final done = Completer<(String, String, bool)?>();
     var pending = list.length;
     for (final h in list) {
       _probeOne(h).then((ok) {
-        if (ok != null && !done.isCompleted) {
-          _base = ok.$1;
-          _checkedAt = DateTime.now();
-          activeHost.value = h;
-          _llmReady = ok.$2;
-          status.value = PcBoostStatus.connected;
-          done.complete(ok.$1);
-        }
-        if (--pending == 0 && !done.isCompleted) {
-          markFailed();
-          done.complete(null);
-        }
+        if (ok != null && !done.isCompleted) done.complete((h, ok.$1, ok.$2));
+        if (--pending == 0 && !done.isCompleted) done.complete(null);
       });
     }
     return done.future;
+  }
+
+  static const String _discoverAsk = 'TALKTOME_DISCOVER';
+  static const String _discoverReply = 'TALKTOME_BOOST ';
+
+  /// Diffuse une question sur le Wi-Fi ; l'ordinateur répond avec son port.
+  /// Android seulement : sur iPhone, la diffusion réseau exige une
+  /// autorisation spéciale d'Apple (adresses saisies et Tailscale à la place).
+  Future<(String, String, bool)?> _discover() async {
+    if (!Platform.isAndroid) return null;
+    RawDatagramSocket? sock;
+    try {
+      sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      sock.broadcastEnabled = true;
+      final candidates = <String>{};
+      final sub = sock.listen((event) {
+        if (event != RawSocketEvent.read) return;
+        final d = sock!.receive();
+        if (d == null) return;
+        final msg = utf8.decode(d.data, allowMalformed: true);
+        if (!msg.startsWith(_discoverReply)) return;
+        final port = int.tryParse(msg.substring(_discoverReply.length).trim());
+        candidates.add('${d.address.address}:${port ?? defaultPort}');
+      });
+      final ask = utf8.encode(_discoverAsk);
+      for (var i = 0; i < 3 && candidates.isEmpty; i++) {
+        sock.send(ask, InternetAddress('255.255.255.255'), defaultPort);
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      await sub.cancel();
+      // Le code d'appairage est vérifié comme pour une adresse saisie.
+      final found = await _firstResponding(candidates.toList());
+      if (found != null) debugPrint('[BOOST] ordinateur retrouvé : ${found.$1}');
+      return found;
+    } catch (e) {
+      debugPrint('[BOOST] recherche sur le Wi-Fi impossible : $e');
+      return null;
+    } finally {
+      sock?.close();
+    }
+  }
+
+  /// Ajoute l'adresse retrouvée en tête de liste (remplace l'ancienne
+  /// adresse locale du même ordinateur, garde Tailscale).
+  Future<void> _rememberHost(String host) async {
+    final ip = host.split(':').first;
+    final kept = hosts.where((h) => _isRemote(h) && h.split(':').first != ip);
+    await _box.put('boostHosts', [host, ...kept].join(', '));
   }
 
   /// (base URL, IA prête) si [h] répond, sinon null.

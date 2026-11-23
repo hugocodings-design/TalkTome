@@ -80,6 +80,31 @@ class OfflineDictionaryService {
     return null;
   }
 
+  /// Mots de [words] (en minuscules) qui existent en [lang], d'après tous les
+  /// dictionnaires installés. Vide si aucun n'est installé.
+  Future<Set<String>> knownWords(Set<String> words, String lang) async {
+    final found = <String>{};
+    for (final defLang in <String>{lang, 'en', 'fr', 'pt'}) {
+      final remaining = words.difference(found).toList();
+      if (remaining.isEmpty) break;
+      final db = await _db(defLang);
+      if (db == null) continue;
+      // SQLite limite le nombre de paramètres d'une requête.
+      for (var i = 0; i < remaining.length; i += 500) {
+        final chunk = remaining.sublist(i, i + 500 > remaining.length ? remaining.length : i + 500);
+        final rows = await db.rawQuery(
+          'SELECT DISTINCT word FROM entries WHERE lang = ? AND word IN '
+          '(${List.filled(chunk.length, '?').join(',')})',
+          [lang, ...chunk],
+        );
+        for (final r in rows) {
+          found.add(r['word'] as String);
+        }
+      }
+    }
+    return found;
+  }
+
   Future<OfflineLookup?> _lookupIn(String defLang, String word, String lang) async {
     final db = await _db(defLang);
     if (db == null) return null;
