@@ -81,12 +81,18 @@ class TtsAudioCache {
     return dir;
   }
 
+  /// v3 (2026-11-23) : silences de début/fin raccourcis (Supertonic), phrases
+  /// de Pocket TTS qui ne s'arrêtaient pas (plafond de longueur + reprise).
+  static const String _audioVersion = 'v3';
+
   /// FNV-1a 64 bits : nom de fichier stable pour (voix, vitesse, texte, et
   /// silence ajouté après la phrase s'il y en a un).
   static String _key(String voice, double speed, String text, int pauseMs) {
     var h = 0xcbf29ce484222325;
     final pause = pauseMs > 0 ? '|p$pauseMs' : '';
-    for (final c in utf8.encode('$voice|${speed.toStringAsFixed(2)}|$text$pause')) {
+    // [_audioVersion] : change quand la fabrication de l'audio change, pour
+    // ne pas rejouer d'anciens fichiers (le ménage efface ces derniers).
+    for (final c in utf8.encode('$_audioVersion|$voice|${speed.toStringAsFixed(2)}|$text$pause')) {
       h ^= c;
       h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
     }

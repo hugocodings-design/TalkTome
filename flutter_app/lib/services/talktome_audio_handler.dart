@@ -297,11 +297,13 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
   }
 
   /// Vitesse, timbre et volume d'un lecteur pour [clip] (humeur comprise :
-  /// sans lecture expressive, le profil neutre ne change rien).
+  /// sans lecture expressive, le profil neutre ne change rien). Le timbre
+  /// est seulement celui choisi pour la voix : l'humeur ne le décale jamais
+  /// (voix déformées, aiguës ou graves, d'une phrase à l'autre).
   Future<void> _tune(AudioPlayer player, TtsClip clip) async {
     final mood = clip.mood;
     await player.setSpeed(_speed * mood.speedFactor / clip.speed);
-    await player.setPitch((_activePitch * mood.pitchFactor).clamp(0.80, 1.20));
+    await player.setPitch(_activePitch);
     await player.setVolume(mood.volume);
   }
 
