@@ -64,8 +64,10 @@ Chaque voix s'affiche « <moteur> <nom> ♀/♂ », dans une section « <langue>
 |---|---|---|---|
 | Kokoro (fp32) | téléphone | EN 3F+3M, FR 1F, PT-BR 1F+2M | natives uniquement |
 | Supertonic 3 (int8) | téléphone | FR, EN, PT : 3F+3M chacune | F1–F3 = identifiants 0–2, M1–M3 = 5–7 ; langue passée par `extra: {'lang': …}` |
-| Pocket TTS (int8) | téléphone | EN 3F+3M | voix imitées d'extraits VCTK (`<modèle>/voices/*.wav`, téléchargés avec le modèle) |
+| Pocket TTS (int8) | téléphone | EN 3F+3M | Alba, Vera, Jane, George, Ewan, Callum : voix imitées d'extraits Kyutai (`<modèle>/voices/*.wav`, téléchargés avec le modèle ou à la première phrase), choisis pour leur constance d'une phrase à l'autre. Texte nettoyé avant synthèse (`pocketCleanText` : pas de guillemets typographiques, …, parenthèses dans son vocabulaire) |
 | Piper | téléphone | FR, PT | anciennes voix (Miro FR/PT, Dii et Tom interdits en usage commercial) |
 | Qwen3-TTS | **ordinateur uniquement** (TalkTome Boost) | FR, EN, PT-PT : 3F+3M chacune | décrites dans `pc_server/qwen_voices.json` (mêmes identifiants), créées par `install_qwen_tts.ps1` |
 
 Le serveur du PC ne fait tourner que Kokoro, Piper et Qwen3 ; Supertonic et Pocket restent toujours sur le téléphone.
+
+⚠️ Avant publication : ajouter un écran de crédits. Les extraits de voix Pocket sont sous CC-BY-4.0 (corpus VCTK, Université d'Édimbourg ; Alba MacKenna via Kyutai) et doivent être crédités.

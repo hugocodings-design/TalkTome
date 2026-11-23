@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
@@ -161,11 +162,11 @@ class SherpaTtsService {
       modelFile: 'lm_main.int8.onnx',
       label: 'Pocket TTS',
       extraFiles: {
-        'voices/anna.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p228_023_enhanced.wav',
+        'voices/alba.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/alba-mackenna/casual.wav',
         'voices/vera.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p229_023_enhanced.wav',
         'voices/jane.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p339_023_enhanced.wav',
-        'voices/charles.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p254_023_enhanced.wav',
-        'voices/paul.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p259_023_enhanced.wav',
+        'voices/ewan.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p260_023_enhanced.wav',
+        'voices/callum.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p252_023_enhanced.wav',
         'voices/george.wav': 'https://huggingface.co/kyutai/tts-voices/resolve/main/vctk/p315_023_enhanced.wav',
       },
     ),
@@ -347,14 +348,18 @@ class SherpaTtsService {
       lang: 'en',
       gender: 'M',
     ),
-    // Pocket TTS (anglais) : voix VCTK (CC-BY-4.0) du catalogue Kyutai.
+    // Pocket TTS (anglais) : extraits du catalogue Kyutai, tous CC-BY-4.0
+    // (VCTK ; Alba MacKenna) — à créditer avant publication. Choisis sur
+    // 27 extraits pour leur constance d'une phrase à l'autre (empreinte
+    // vocale WeSpeaker, 2026-11-23) : aussi stables que Supertonic. Anna,
+    // Charles et Paul, trop changeants, ont été remplacés.
     SherpaVoice(
-      name: 'sherpa-pocket-anna',
-      displayName: 'Anna',
+      name: 'sherpa-pocket-alba',
+      displayName: 'Alba',
       languageCode: 'en-GB',
       modelId: 'pocket',
       gender: 'F',
-      reference: 'voices/anna.wav',
+      reference: 'voices/alba.wav',
     ),
     SherpaVoice(
       name: 'sherpa-pocket-vera',
@@ -373,20 +378,20 @@ class SherpaTtsService {
       reference: 'voices/jane.wav',
     ),
     SherpaVoice(
-      name: 'sherpa-pocket-charles',
-      displayName: 'Charles',
+      name: 'sherpa-pocket-ewan',
+      displayName: 'Ewan',
       languageCode: 'en-GB',
       modelId: 'pocket',
       gender: 'M',
-      reference: 'voices/charles.wav',
+      reference: 'voices/ewan.wav',
     ),
     SherpaVoice(
-      name: 'sherpa-pocket-paul',
-      displayName: 'Paul',
+      name: 'sherpa-pocket-callum',
+      displayName: 'Callum',
       languageCode: 'en-GB',
       modelId: 'pocket',
       gender: 'M',
-      reference: 'voices/paul.wav',
+      reference: 'voices/callum.wav',
     ),
     SherpaVoice(
       name: 'sherpa-pocket-george',
@@ -782,6 +787,29 @@ class SherpaTtsService {
   Future<String> _modelDir(SherpaModelSpec spec) async =>
       '${(await modelsRoot()).path}/${spec.folder}';
 
+  /// Extrait de voix (Pocket TTS) absent — modèle installé avant l'ajout de
+  /// cette voix : téléchargé une fois, à la première phrase.
+  Future<void> _ensureReference(SherpaModelSpec spec, String dir, String rel) async {
+    final file = File('$dir/$rel');
+    if (await file.exists()) return;
+    final url = spec.extraFiles[rel];
+    if (url == null) throw Exception('Extrait de voix manquant : $rel');
+    final tmp = File('${file.path}.part');
+    await tmp.parent.create(recursive: true);
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(Uri.parse(url));
+      final res = await req.close();
+      if (res.statusCode != 200) {
+        throw Exception('Extrait de voix introuvable (${res.statusCode}) : $rel');
+      }
+      await res.pipe(tmp.openWrite());
+      await tmp.rename(file.path);
+    } finally {
+      client.close();
+    }
+  }
+
   Future<bool> isModelInstalled(String modelId) async {
     final spec = modelById(modelId);
     if (!spec.runsOnPhone) return false;
@@ -899,6 +927,10 @@ class SherpaTtsService {
       throw Exception('Modèle ${spec.label} non installé sur ce téléphone');
     }
 
+    if (voice.reference.isNotEmpty) {
+      await _ensureReference(spec, dir, voice.reference);
+    }
+
     final worker = await _ensureWorker();
     final reply = ReceivePort();
     worker.send({
@@ -938,6 +970,7 @@ void _workerMain(SendPort mainPort) {
   String? loadedKey;
   sherpa.OfflineTts? tts;
   final references = <String, (Float32List, int)>{};
+  final pocketChars = <String, Set<String>>{};
 
   inbox.listen((dynamic raw) {
     final msg = raw as Map;
@@ -971,7 +1004,9 @@ void _workerMain(SendPort mainPort) {
         // Voix imitée à partir d'un court extrait, gardé en mémoire.
         final ref = references[msg['reference'] as String] ??=
             _readWavMono(msg['reference'] as String);
-        final prompt = pocketPrompt(text);
+        final allowed = pocketChars[msg['dir'] as String] ??=
+            _readPocketChars(msg['dir'] as String);
+        final prompt = pocketPrompt(pocketCleanText(text, allowed));
         // Valeurs en texte : le moteur ignore les nombres dans « extra ».
         final config = sherpa.OfflineTtsGenerationConfig(
           speed: speed,
@@ -1086,6 +1121,25 @@ sherpa.OfflineTtsConfig _buildConfig(Map msg) {
   }
 
   return sherpa.OfflineTtsConfig(model: model);
+}
+
+/// Caractères que connaît Pocket TTS (toutes les lettres et signes des
+/// morceaux de son vocab.json, sans le marqueur d'espace « ▁ »). Vide si le
+/// fichier est illisible : le nettoyage garde alors tous les caractères.
+Set<String> _readPocketChars(String dir) {
+  try {
+    final vocab = jsonDecode(File('$dir/vocab.json').readAsStringSync()) as Map;
+    final chars = <String>{};
+    for (final k in vocab.keys) {
+      for (final r in (k as String).runes) {
+        chars.add(String.fromCharCode(r));
+      }
+    }
+    chars.remove('▁');
+    return chars;
+  } catch (_) {
+    return const {};
+  }
 }
 
 /// Lit un WAV (PCM 16/24/32 bits ou flottant 32 bits, mono ou stéréo) et

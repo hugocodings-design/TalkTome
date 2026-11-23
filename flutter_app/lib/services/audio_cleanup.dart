@@ -14,6 +14,34 @@ class PocketPrompt {
   final int framesAfterEos;
 }
 
+/// Rend une phrase de livre lisible par Pocket TTS. Son vocabulaire n'a ni
+/// guillemets typographiques (“ ” ‘ ’), ni points de suspension (…), ni
+/// parenthèses : ces signes, partout dans les dialogues, le faisaient
+/// dérailler (sons qui ne ressemblent pas à une voix, phrases deux fois trop
+/// longues). [allowed] : caractères connus du modèle (tirés de vocab.json) ;
+/// tout autre signe devient une espace.
+String pocketCleanText(String text, Set<String> allowed) {
+  var t = text
+      .replaceAll(RegExp('[“”„«»"]'), '')
+      .replaceAll(RegExp('[‘’‛`´]'), "'")
+      .replaceAll('…', '...')
+      .replaceAll(RegExp(r'\s*[—–]\s*'), ', ')
+      .replaceAll(RegExp(r'\s*[()\[\]{}]\s*'), ', ');
+  if (allowed.isNotEmpty) {
+    final b = StringBuffer();
+    for (final r in t.runes) {
+      final c = String.fromCharCode(r);
+      b.write(c == ' ' || allowed.contains(c) ? c : ' ');
+    }
+    t = b.toString();
+  }
+  t = t
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAllMapped(RegExp(r' ([,.!?;:])'), (m) => m[1]!)
+      .replaceAllMapped(RegExp(r',\s*([,.!?])'), (m) => m[1]!);
+  return t.replaceAll(RegExp(r'^[\s,]+|[\s,]+$'), '');
+}
+
 /// Prépare une phrase comme le fait le logiciel officiel de Kyutai : sans
 /// ça, une phrase très courte (« Yes. », « Chapitre un ») ne s'arrête pas et
 /// Pocket produit jusqu'à 30 s de bruits qui ne ressemblent pas à une voix.
