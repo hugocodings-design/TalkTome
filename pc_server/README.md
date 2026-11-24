@@ -42,7 +42,18 @@ Profile → Computer acceleration → TalkTome Boost:
 - addresses: `192.168.0.18` (home Wi-Fi), plus the PC's Tailscale address `100.x.y.z`
 - code: the `token` value in `%LOCALAPPDATA%\TalkTomeBoost\config.json`
 
-## Anywhere (Tailscale)
+## Anywhere, without Tailscale on the phone (Tailscale Funnel)
+
+`install_boost.ps1` publishes Boost with Tailscale Funnel at `https://<pc>.<tailnet>.ts.net/talktome`
+(`tailscale funnel --bg --set-path /talktome http://127.0.0.1:47815`). On the phone:
+- addresses: `192.168.0.18, https://<pc>.<tailnet>.ts.net/talktome`
+- code: the **`remote_key`** value in `config.json` (it also works on the home Wi-Fi)
+
+Requests through Funnel reach Boost from 127.0.0.1: only `remote_key` (256 bits) is accepted there, never the
+6-digit code, and 10 bad keys in a minute lock Funnel access for a minute. Boost ignores `X-Forwarded-For`
+(`proxy_headers=False`), so a request from the Internet can't pass for a Wi-Fi one.
+
+## Anywhere (Tailscale on the phone)
 
 Install Tailscale on the PC and on the phone, signed in to the same account. Then add the PC's `100.x.y.z` address to the phone's address list.
 

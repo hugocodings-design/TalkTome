@@ -89,7 +89,7 @@ class _PcBoostTileState extends State<PcBoostTile> {
                 decoration: InputDecoration(
                   labelText: l10n.profileScreen_boostHosts,
                   helperText: l10n.profileScreen_boostHostsHint,
-                  hintText: '192.168.0.18, 100.x.y.z',
+                  hintText: '192.168.0.18, https://pc.tailXXXX.ts.net/talktome',
                 ),
                 keyboardType: TextInputType.url,
                 onSubmitted: (_) => apply(),
@@ -98,7 +98,9 @@ class _PcBoostTileState extends State<PcBoostTile> {
               TextField(
                 controller: code,
                 decoration: InputDecoration(labelText: l10n.profileScreen_boostCode),
-                keyboardType: TextInputType.number,
+                keyboardType: TextInputType.visiblePassword,
+                autocorrect: false,
+                enableSuggestions: false,
                 onSubmitted: (_) => apply(),
               ),
               const SizedBox(height: 16),

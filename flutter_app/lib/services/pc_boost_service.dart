@@ -50,7 +50,19 @@ class PcBoostService {
     ..connectionTimeout = const Duration(seconds: 6)
     ..idleTimeout = const Duration(seconds: 30);
 
+  /// Base URL d'une adresse saisie : « 192.168.0.18 », « hôte:port », ou une
+  /// adresse complète comme « https://mon-pc.tailXXXX.ts.net/talktome »
+  /// (Tailscale Funnel : joignable de partout, sans Tailscale sur le
+  /// téléphone ; il faut alors la clé longue du PC à la place du code).
+  static String _baseFor(String h) {
+    if (h.startsWith('http://') || h.startsWith('https://')) {
+      return h.replaceAll(RegExp(r'/+$'), '');
+    }
+    return h.contains(':') ? 'http://$h' : 'http://$h:$defaultPort';
+  }
+
   static bool _isRemote(String host) {
+    if (host.startsWith('http://') || host.startsWith('https://')) return true;
     final ip = host.split(':').first;
     final p = ip.split('.').map(int.tryParse).toList();
     if (p.length == 4 && p.every((e) => e != null)) {
@@ -208,7 +220,7 @@ class PcBoostService {
 
   /// (base URL, IA prête) si [h] répond, sinon null.
   Future<(String, bool)?> _probeOne(String h) async {
-    final b = h.contains(':') ? 'http://$h' : 'http://$h:$defaultPort';
+    final b = _baseFor(h);
     final remote = _isRemote(h);
     try {
       final req = await (remote ? _remoteHttp : _lanHttp).getUrl(Uri.parse('$b/health'));

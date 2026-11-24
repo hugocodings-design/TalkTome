@@ -13,6 +13,7 @@ Application Flutter (Android, iPhone) : on importe des livres (PDF, EPUB, pages 
 - **IA locale Qwen** : llama.cpp intégré (`flutter_app/packages/llama_flutter_android`, Android uniquement), modèle `<support>/llm/qwen3-4b-instruct.gguf`.
 - **Traduction en direct** : ML Kit, sur le téléphone.
 - **TalkTome Boost** (`pc_server/`) : quand le PC est joignable (Wi-Fi ou Tailscale), voix et Qwen tournent sur sa carte graphique ; sinon le téléphone fait tout.
+  De partout sans Tailscale sur le téléphone (1.0.1) : Tailscale Funnel `https://<pc>.<tailnet>.ts.net/talktome` → Boost ; l'app accepte une adresse `https://…` dans la liste et la clé longue `remote_key` (config.json) dans le champ du code. Par Funnel (client 127.0.0.1, `proxy_headers=False`) seule `remote_key` passe, jamais le code à 6 chiffres ; 10 mauvaises clés/min → 1 min de blocage.
 
 Les modèles de voix, le dictionnaire et Qwen ne sont pas dans le dépôt : ils ont été copiés sur le téléphone Android à la main.
 

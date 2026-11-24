@@ -67,7 +67,7 @@ import httpx  # noqa: E402
 import numpy as np  # noqa: E402
 import sherpa_onnx  # noqa: E402
 import uvicorn  # noqa: E402
-from fastapi import FastAPI, Header, HTTPException  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Request  # noqa: E402
 from fastapi.responses import Response, StreamingResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
@@ -89,6 +89,11 @@ def load_config() -> dict:
     if not cfg.get('port'):
         cfg['port'] = 47815
         changed = True
+    if not cfg.get('remote_key'):
+        # Clé longue pour l'accès depuis Internet (Tailscale Funnel) : 6 chiffres
+        # se devinent, 256 bits non.
+        cfg['remote_key'] = secrets.token_urlsafe(32)
+        changed = True
     if changed:
         CONFIG.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
     return cfg
@@ -101,11 +106,34 @@ app = FastAPI(title='TalkTome Boost', version=str(VERSION))
 _last_use = 0.0  # dernière demande réussie d'un téléphone (time.monotonic)
 
 
-def check_token(token: str | None) -> None:
-    global _last_use
-    if not token or not secrets.compare_digest(token, cfg['token']):
+LOOPBACK = {'127.0.0.1', '::1', 'localhost'}
+_guard_lock = threading.Lock()
+_bad_keys: list[float] = []  # mauvaises clés venues par Funnel (minute glissante)
+_locked_until = 0.0
+
+
+def check_token(token: str | None, request: Request) -> None:
+    """Wi-Fi / Tailscale : code à 6 chiffres ou clé longue. Par Tailscale Funnel
+    (Internet), la demande arrive de 127.0.0.1 : seule la clé longue est acceptée,
+    et 10 mauvaises clés en une minute bloquent Funnel une minute."""
+    global _last_use, _locked_until
+    funnel = (request.client.host if request.client else '') in LOOPBACK
+    now = time.monotonic()
+    if funnel and now < _locked_until:
+        raise HTTPException(status_code=429, detail='trop d\'essais, réessayez dans une minute')
+    ok = bool(token) and secrets.compare_digest(token.encode(), cfg['remote_key'].encode())
+    if not ok and not funnel:
+        ok = bool(token) and secrets.compare_digest(token.encode(), cfg['token'].encode())
+    if not ok:
+        if funnel:
+            with _guard_lock:
+                _bad_keys[:] = [t for t in _bad_keys if now - t < 60] + [now]
+                if len(_bad_keys) >= 10:
+                    _locked_until = now + 60
+                    _bad_keys.clear()
+                    log.warning('Funnel : 10 mauvaises clés en une minute, bloqué 1 min')
         raise HTTPException(status_code=401, detail='code incorrect')
-    _last_use = time.monotonic()
+    _last_use = now
 
 
 # ── Connexion stable ─────────────────────────────────────────────────────────
@@ -229,8 +257,8 @@ def _wav(samples: np.ndarray, sr: int) -> bytes:
 
 
 @app.post('/tts')
-def tts(req: TtsRequest, x_boost_token: str | None = Header(default=None)):
-    check_token(x_boost_token)
+def tts(req: TtsRequest, request: Request, x_boost_token: str | None = Header(default=None)):
+    check_token(x_boost_token, request)
     if req.kind == 'qwen3':
         return _qwen_tts(req)
     t = time.perf_counter()
@@ -338,8 +366,8 @@ class LlmRequest(BaseModel):
 
 
 @app.post('/llm')
-async def llm(req: LlmRequest, x_boost_token: str | None = Header(default=None)):
-    check_token(x_boost_token)
+async def llm(req: LlmRequest, request: Request, x_boost_token: str | None = Header(default=None)):
+    check_token(x_boost_token, request)
     if not llama_ready():
         raise HTTPException(status_code=503, detail='IA locale pas prête')
     body = {
@@ -373,8 +401,8 @@ async def llm(req: LlmRequest, x_boost_token: str | None = Header(default=None))
 
 
 @app.get('/health')
-def health(x_boost_token: str | None = Header(default=None)):
-    check_token(x_boost_token)
+def health(request: Request, x_boost_token: str | None = Header(default=None)):
+    check_token(x_boost_token, request)
     return {'ok': True, 'version': VERSION, 'tts': _provider, 'llm': llama_ready(),
             'qwen3': _qwen_http_ok()}
 
@@ -387,8 +415,11 @@ def main() -> None:
     threading.Thread(target=discovery_responder, daemon=True).start()
     threading.Thread(target=keep_awake, daemon=True).start()
     try:
+        # proxy_headers=False : Tailscale Funnel ajoute X-Forwarded-For ; s'y fier
+        # ferait passer une demande d'Internet pour une demande du Wi-Fi (code à
+        # 6 chiffres accepté). L'adresse vue doit rester 127.0.0.1 → clé longue.
         uvicorn.run(app, host='0.0.0.0', port=int(cfg['port']), log_level='warning',
-                    log_config=None)
+                    log_config=None, proxy_headers=False)
     finally:
         for proc in (_llama_proc, _qwen_proc):
             if proc and proc.poll() is None:

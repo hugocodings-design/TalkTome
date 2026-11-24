@@ -906,10 +906,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileScreen_boostHostsHint =>
-      'Wi-Fi and Tailscale, comma-separated';
+      'Wi-Fi, Tailscale or Funnel https address (anywhere, no Tailscale), comma-separated';
 
   @override
-  String get profileScreen_boostCode => 'Pairing code (6 digits)';
+  String get profileScreen_boostCode =>
+      'Pairing code (6 digits) or long key (Funnel)';
 
   @override
   String get profileScreen_boostTest => 'Test';

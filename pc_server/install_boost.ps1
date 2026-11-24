@@ -84,3 +84,12 @@ Get-CimInstance Win32_Process | Where-Object {
 Start-Sleep -Seconds 2
 Start-Process wscript.exe -ArgumentList "`"$vbs`"" -WorkingDirectory $base
 Write-Output "TalkTome Boost démarré (relancé automatiquement s'il s'arrête)."
+
+# De partout, sans Tailscale sur le téléphone : Tailscale Funnel publie Boost sur
+# https://<ce PC>.<tailnet>.ts.net/talktome. Par là, seule la clé longue
+# (« remote_key » de config.json) est acceptée, jamais le code à 6 chiffres.
+$ts = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
+if (Test-Path $ts) {
+    & $ts funnel --bg --set-path /talktome "http://127.0.0.1:$port" 2>&1 | Out-Null
+    Write-Output "Funnel : https://<ce PC>.ts.net/talktome — clé longue : remote_key dans $base\config.json"
+}

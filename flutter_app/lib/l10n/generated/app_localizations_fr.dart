@@ -914,10 +914,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get profileScreen_boostHostsHint =>
-      'Wi-Fi et Tailscale, séparées par des virgules';
+      'Wi-Fi, Tailscale ou adresse https Funnel (partout, sans Tailscale), séparées par des virgules';
 
   @override
-  String get profileScreen_boostCode => 'Code d\'appairage (6 chiffres)';
+  String get profileScreen_boostCode =>
+      'Code d\'appairage (6 chiffres) ou clé longue (Funnel)';
 
   @override
   String get profileScreen_boostTest => 'Tester';
