@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ressources demandées par leur nom pendant l'exécution (audio_service :
+     androidNotificationIcon 'drawable/ic_notification' et les icônes des
+     boutons de la notification) : sans ceci, la version release les retire
+     et la lecture fait planter l'app (« Invalid notification (no valid small icon) »). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification,@drawable/audio_service_*" />
