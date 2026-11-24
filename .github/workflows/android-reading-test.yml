@@ -1,0 +1,65 @@
+# Test de lecture sur un vrai Android : lance l'app dans un émulateur, ouvre
+# un livre anglais et le fait lire avec Kokoro, Supertonic 3 et Pocket TTS.
+# Échoue si l'app plante ou si la lecture n'avance pas. Journal Android,
+# mémoire et résultats en artefact « reading-test-logs ».
+#
+# Limite : émulateur x86_64, donc sans l'IA Qwen intégrée (arm64 seulement).
+name: Android reading test
+
+on:
+  push:
+    branches: [master, 'claude/**']
+    paths: ['flutter_app/**', '.github/workflows/android-reading-test.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: android-reading-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Activer KVM (accélération de l'émulateur)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.5'
+          channel: stable
+          cache: true
+
+      - name: Dépendances
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Lecture dans l'émulateur
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          ram-size: 4096M
+          disk-size: 8G
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: bash flutter_app/integration_test/run_on_emulator.sh
+
+      - name: Garder les journaux
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reading-test-logs
+          path: reading-test-logs/
+          retention-days: 14
