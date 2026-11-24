@@ -32,6 +32,8 @@ Chapter One.
 The rain kept falling, steady and cold, as if the sky itself had decided to stay for the night… It was 7:45 p.m. when they finally reached the door, and the lock (rusted, of course) wouldn't move.
 
 "Well," he said at last, "I suppose we'll have to break it." She laughed — a short, nervous laugh — and stepped back. Nothing happened. Then, slowly, the door creaked open by itself, revealing a narrow staircase that spiraled up into darkness. They looked at each other for a long moment before either of them dared to speak again. Somewhere above, a floorboard groaned. "Did you hear that?" she whispered. He nodded, and together they began to climb.
+
+The stairs were steeper than they looked. At the top, a small round room opened before them, its windows black with rain. A lamp stood on a table in the middle, still warm, as if someone had left only a minute ago. "Hello?" he called. No one answered. On the table lay a letter, folded twice and sealed with red wax. She picked it up, turned it over, and read the name written on the back in careful, old-fashioned handwriting. It was her own.
 ''';
 
 /// Voix testées : une par moteur du téléphone.
@@ -42,8 +44,8 @@ const _voices = [
 ];
 
 /// Lecture exigée par voix : phrases réellement jouées, sans saut.
-const _sentencesToPlay = 8;
-const _perVoiceTimeout = Duration(minutes: 6);
+const _sentencesToPlay = 20;
+const _perVoiceTimeout = Duration(minutes: 10);
 
 void log(String s) => debugPrint('[READING-TEST] $s');
 
@@ -59,6 +61,10 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('reads an English book aloud on every phone engine', (tester) async {
+    // L'app remplace l'affichage d'erreur de Flutter au démarrage ; le cadre
+    // de test exige qu'on le remette en place à la fin.
+    final originalErrorBuilder = ErrorWidget.builder;
+    addTearDown(() => ErrorWidget.builder = originalErrorBuilder);
     app.main();
     // Démarrage : Hive ouvert et lecteur audio prêt.
     for (var i = 0; i < 240 && (app.audioHandler == null || !Hive.isBoxOpen('ebooks')); i++) {
