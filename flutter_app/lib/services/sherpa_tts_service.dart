@@ -65,6 +65,7 @@ class SherpaVoice {
     this.britishLexicon = false,
     this.gender = '',
     this.reference = '',
+    this.emotionSource = '',
   });
 
   final String name;
@@ -88,6 +89,16 @@ class SherpaVoice {
   /// Pocket TTS : extrait de voix (relatif au dossier du modèle) imité par
   /// le moteur.
   final String reference;
+
+  /// Pocket « émotions » : voix Qwen3-TTS de l'ordinateur dont les extraits
+  /// (un par humeur : neutre, joyeux, triste…) sont imités. Les extraits
+  /// sont récupérés une fois depuis l'ordinateur, puis tout marche hors
+  /// ligne. Vide pour les autres voix.
+  final String emotionSource;
+
+  /// Extrait de référence pour [emotion] (Pocket « émotions »).
+  String referenceFor(String emotion) =>
+      'voices/emo/${emotionSource}__$emotion.wav';
 
   /// Configuration du moteur nécessaire à cette voix : changer de clé
   /// impose de recharger le modèle. Supertonic et Pocket choisissent langue
@@ -400,6 +411,57 @@ class SherpaTtsService {
       modelId: 'pocket',
       gender: 'M',
       reference: 'voices/george.wav',
+    ),
+    // Pocket TTS « émotions » (anglais) : imite les voix Qwen3-TTS de
+    // l'ordinateur, avec un extrait par humeur (récupérés une fois depuis
+    // l'ordinateur, puis hors ligne).
+    SherpaVoice(
+      name: 'sherpa-pocket-emo-olivia',
+      displayName: 'Olivia',
+      languageCode: 'en-US',
+      modelId: 'pocket',
+      gender: 'F',
+      emotionSource: 'qwen3-en-f1',
+    ),
+    SherpaVoice(
+      name: 'sherpa-pocket-emo-grace',
+      displayName: 'Grace',
+      languageCode: 'en-GB',
+      modelId: 'pocket',
+      gender: 'F',
+      emotionSource: 'qwen3-en-f2',
+    ),
+    SherpaVoice(
+      name: 'sherpa-pocket-emo-hannah',
+      displayName: 'Hannah',
+      languageCode: 'en-US',
+      modelId: 'pocket',
+      gender: 'F',
+      emotionSource: 'qwen3-en-f3',
+    ),
+    SherpaVoice(
+      name: 'sherpa-pocket-emo-daniel',
+      displayName: 'Daniel',
+      languageCode: 'en-US',
+      modelId: 'pocket',
+      gender: 'M',
+      emotionSource: 'qwen3-en-m1',
+    ),
+    SherpaVoice(
+      name: 'sherpa-pocket-emo-james',
+      displayName: 'James',
+      languageCode: 'en-GB',
+      modelId: 'pocket',
+      gender: 'M',
+      emotionSource: 'qwen3-en-m2',
+    ),
+    SherpaVoice(
+      name: 'sherpa-pocket-emo-ethan',
+      displayName: 'Ethan',
+      languageCode: 'en-US',
+      modelId: 'pocket',
+      gender: 'M',
+      emotionSource: 'qwen3-en-m3',
     ),
     // Qwen3-TTS (en) — ordinateur uniquement ; voix décrites dans
     // pc_server/qwen_voices.json (mêmes identifiants).
@@ -769,6 +831,13 @@ class SherpaTtsService {
     ),
   ];
 
+  /// Voix qui expriment elles-mêmes l'humeur (Qwen3-TTS, Pocket « émotions »).
+  static bool isEmotionalVoice(String name) {
+    final v = voiceByName(name);
+    if (v == null) return false;
+    return v.emotionSource.isNotEmpty || modelById(v.modelId).kind == SherpaModelKind.qwen3;
+  }
+
   static SherpaVoice? voiceByName(String name) {
     for (final v in voices) {
       if (v.name == name) return v;
@@ -789,6 +858,45 @@ class SherpaTtsService {
 
   /// Extrait de voix (Pocket TTS) absent — modèle installé avant l'ajout de
   /// cette voix : téléchargé une fois, à la première phrase.
+  /// Extrait de l'humeur [emotion] pour une voix Pocket « émotions » : celui
+  /// de l'humeur s'il est là (ou récupérable sur l'ordinateur), sinon le
+  /// neutre.
+  Future<String> _emotionReference(SherpaVoice voice, String dir, String emotion) async {
+    final wanted = voice.referenceFor(emotion);
+    if (await File('$dir/$wanted').exists()) return wanted;
+    if (await PcBoostService.instance.downloadVoiceRef(
+        voice.emotionSource, emotion, '$dir/$wanted')) {
+      return wanted;
+    }
+    final neutral = voice.referenceFor('neutral');
+    if (await File('$dir/$neutral').exists()) return neutral;
+    throw Exception('Voix ${voice.displayName} : extraits à récupérer depuis '
+        'l\'ordinateur (Profil → Voix IA)');
+  }
+
+  /// Récupère depuis l'ordinateur tous les extraits des voix Pocket
+  /// « émotions ». Renvoie le nombre d'extraits obtenus.
+  Future<int> fetchEmotionalPocketVoices() async {
+    final spec = modelById('pocket');
+    final dir = await _modelDir(spec);
+    var got = 0;
+    for (final v in voices.where((v) => v.emotionSource.isNotEmpty)) {
+      for (final emotion in emotionNames) {
+        final path = '$dir/${v.referenceFor(emotion)}';
+        if (await File(path).exists() ||
+            await PcBoostService.instance.downloadVoiceRef(v.emotionSource, emotion, path)) {
+          got++;
+        }
+      }
+    }
+    return got;
+  }
+
+  /// Humeurs qui ont chacune leur extrait de voix.
+  static const List<String> emotionNames = [
+    'neutral', 'happy', 'excited', 'sad', 'angry', 'scared', 'calm',
+  ];
+
   Future<void> _ensureReference(SherpaModelSpec spec, String dir, String rel) async {
     final file = File('$dir/$rel');
     if (await file.exists()) return;
@@ -827,6 +935,16 @@ class SherpaTtsService {
     final installed = <String, bool>{};
     final result = <SherpaVoice>[];
     for (final v in voices) {
+      if (v.emotionSource.isNotEmpty) {
+        // Modèle Pocket présent + extraits récupérés depuis l'ordinateur.
+        final spec = modelById(v.modelId);
+        final dir = await _modelDir(spec);
+        if (await File('$dir/${spec.modelFile}').exists() &&
+            await File('$dir/${v.referenceFor('neutral')}').exists()) {
+          result.add(v);
+        }
+        continue;
+      }
       installed[v.modelId] ??= await isModelInstalled(v.modelId);
       if (installed[v.modelId]!) result.add(v);
     }
@@ -872,6 +990,7 @@ class SherpaTtsService {
     required String voiceName,
     required String outPath,
     double speed = 1.0,
+    String? emotion,
   }) async {
     final voice = voiceByName(voiceName);
     if (voice == null) {
@@ -889,6 +1008,7 @@ class SherpaTtsService {
           'modelFile': '',
           'voice': voice.name.substring(voicePrefix.length),
           'lang': voice.lang,
+          'mood': emotion ?? 'neutral',
         },
         text: text,
         speed: speed,
@@ -927,8 +1047,11 @@ class SherpaTtsService {
       throw Exception('Modèle ${spec.label} non installé sur ce téléphone');
     }
 
-    if (voice.reference.isNotEmpty) {
-      await _ensureReference(spec, dir, voice.reference);
+    var reference = voice.reference;
+    if (voice.emotionSource.isNotEmpty) {
+      reference = await _emotionReference(voice, dir, emotion ?? 'neutral');
+    } else if (reference.isNotEmpty) {
+      await _ensureReference(spec, dir, reference);
     }
 
     final worker = await _ensureWorker();
@@ -944,7 +1067,7 @@ class SherpaTtsService {
       'threads': threads,
       'text': text,
       'sid': voice.sid,
-      'reference': voice.reference.isEmpty ? '' : '$dir/${voice.reference}',
+      'reference': reference.isEmpty ? '' : '$dir/$reference',
       'speed': speed,
       'outPath': outPath,
     });

@@ -1747,6 +1747,54 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Cette voix (Qwen3-TTS) est générée par votre ordinateur avec TalkTome Boost, qui ne répond pas pour l\'instant. Allumez l\'ordinateur, vérifiez Profil → TalkTome Boost, ou choisissez une voix marquée « téléphone ».'**
   String get voice_pcRequiredBody;
+
+  /// No description provided for @profileScreen_expressiveIntensity.
+  ///
+  /// In fr, this message translates to:
+  /// **'Intensité des émotions'**
+  String get profileScreen_expressiveIntensity;
+
+  /// No description provided for @profileScreen_expressiveIntensitySubtle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Discrète'**
+  String get profileScreen_expressiveIntensitySubtle;
+
+  /// No description provided for @profileScreen_expressiveIntensityStrong.
+  ///
+  /// In fr, this message translates to:
+  /// **'Marquée'**
+  String get profileScreen_expressiveIntensityStrong;
+
+  /// No description provided for @voiceDownloads_emotionalTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voix Pocket « émotions »'**
+  String get voiceDownloads_emotionalTitle;
+
+  /// No description provided for @voiceDownloads_emotionalHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'6 voix anglaises qui expriment vraiment les émotions. Leurs extraits sont créés par l\'ordinateur (TalkTome Boost avec Qwen3-TTS) : récupérez-les une fois, ensuite tout marche hors ligne.'**
+  String get voiceDownloads_emotionalHint;
+
+  /// No description provided for @voiceDownloads_emotionalFetch.
+  ///
+  /// In fr, this message translates to:
+  /// **'Récupérer depuis l\'ordinateur'**
+  String get voiceDownloads_emotionalFetch;
+
+  /// No description provided for @voiceDownloads_emotionalResult.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} extraits sur 42 récupérés'**
+  String voiceDownloads_emotionalResult(int count);
+
+  /// No description provided for @voiceDownloads_emotionalNeedsPocket.
+  ///
+  /// In fr, this message translates to:
+  /// **'Téléchargez d\'abord Pocket TTS ci-dessous.'**
+  String get voiceDownloads_emotionalNeedsPocket;
 }
 
 class _AppLocalizationsDelegate

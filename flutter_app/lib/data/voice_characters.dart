@@ -163,8 +163,10 @@ VoiceCharacter characterForVoice(String voiceName) {
     final where = spec.runsOnPhone ? 'téléphone' : 'ordinateur requis';
     return VoiceCharacter(
       name: '${tags[spec.kind]} ${ai.displayName}$gender',
+      // « émotions » : voix qui expriment elles-mêmes l'humeur.
       language: '${languages[ai.languageCode] ?? ai.languageCode} · '
-          '${spec.engineName} · $where',
+          '${spec.engineName}${SherpaTtsService.isEmotionalVoice(voiceName) ? ' émotions' : ''}'
+          '${ai.emotionSource.isNotEmpty ? ' (extraits de l\'ordinateur)' : ''} · $where',
       photoAsset: '',
     );
   }

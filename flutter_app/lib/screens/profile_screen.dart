@@ -4,7 +4,7 @@ import 'package:intl/intl.dart' as intl;
 import '../l10n/generated/app_localizations.dart';
 import '../main.dart'
     show themeModeNotifier, fontFamilyNotifier, fontSizeNotifier, readerMarginNotifier,
-        expressiveReadingNotifier, dictionaryLanguageNotifier, translationLanguageNotifier,
+        expressiveReadingNotifier, expressiveIntensityNotifier, dictionaryLanguageNotifier, translationLanguageNotifier,
         appLocaleNotifier;
 import '../services/sherpa_tts_service.dart';
 import '../services/stats_service.dart';
@@ -55,6 +55,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _setReaderMargin(double margin) {
     readerMarginNotifier.value = margin;
     Hive.box('settings').put('readerMargin', margin);
+  }
+
+  double? _intensityDrag;
+
+  void _setExpressiveIntensity(double value) {
+    setState(() => _intensityDrag = null);
+    expressiveIntensityNotifier.value = value;
+    Hive.box('settings').put('expressiveIntensity', value);
   }
 
   void _setExpressiveReading(bool enabled) {
@@ -283,6 +291,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
             value: enabled,
             onChanged: _setExpressiveReading,
           ),
+        ),
+        // Intensité des émotions (appliquée au relâchement du curseur : les
+        // phrases préparées sont refaites une seule fois).
+        ValueListenableBuilder<bool>(
+          valueListenable: expressiveReadingNotifier,
+          builder: (context, enabled, _) => !enabled
+              ? const SizedBox.shrink()
+              : ValueListenableBuilder<double>(
+                  valueListenable: expressiveIntensityNotifier,
+                  builder: (context, intensity, _) => Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Row(
+                      children: [
+                        Text(l10n.profileScreen_expressiveIntensitySubtle,
+                            style: Theme.of(context).textTheme.bodySmall),
+                        Expanded(
+                          child: Slider(
+                            value: _intensityDrag ?? intensity,
+                            min: 0.3,
+                            max: 1.0,
+                            divisions: 7,
+                            label: l10n.profileScreen_expressiveIntensity,
+                            onChanged: (v) => setState(() => _intensityDrag = v),
+                            onChangeEnd: _setExpressiveIntensity,
+                          ),
+                        ),
+                        Text(l10n.profileScreen_expressiveIntensityStrong,
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ),
         ),
 
         const Divider(),
