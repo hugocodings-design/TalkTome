@@ -28,7 +28,7 @@ STATUS=${PIPESTATUS[0]}
 
 kill $WATCH $LOGCAT 2>/dev/null
 echo "── Plantages dans le journal Android ──"
-grep -n -E "FATAL EXCEPTION|Fatal signal|SIGSEGV|SIGABRT|Abort message|lowmemorykiller|has died|ANR in $PKG|Process $PKG.*died" "$OUT/logcat.txt" | head -50 || true
+grep -n -E "FATAL EXCEPTION|Fatal signal|SIGSEGV|SIGABRT|Abort message|lowmemorykiller|ANR in $PKG|Process $PKG.*(died|crash)|Killing [0-9]+:$PKG" "$OUT/logcat.txt" | grep -v -E "googlequicksearchbox|com\.google\.android\.gms" | head -50 || echo "aucun"
 echo "── Mémoire de l'app ──"
 cat "$OUT/memory.txt" 2>/dev/null | tail -40 || true
 echo "── Lignes du test ──"

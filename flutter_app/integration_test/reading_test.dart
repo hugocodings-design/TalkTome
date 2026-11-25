@@ -64,7 +64,6 @@ void main() {
     // L'app remplace l'affichage d'erreur de Flutter au démarrage ; le cadre
     // de test exige qu'on le remette en place à la fin.
     final originalErrorBuilder = ErrorWidget.builder;
-    addTearDown(() => ErrorWidget.builder = originalErrorBuilder);
     app.main();
     // Démarrage : Hive ouvert et lecteur audio prêt.
     for (var i = 0; i < 240 && (app.audioHandler == null || !Hive.isBoxOpen('ebooks')); i++) {
@@ -139,5 +138,7 @@ void main() {
       await _wait(tester, const Duration(seconds: 2));
     }
     log('TOUT EST OK');
+    // Vérifié par le cadre de test avant tout nettoyage : à remettre ici.
+    ErrorWidget.builder = originalErrorBuilder;
   }, timeout: const Timeout(Duration(minutes: 45)));
 }
