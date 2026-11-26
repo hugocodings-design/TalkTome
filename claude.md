@@ -64,3 +64,8 @@ Chaque voix s'affiche « <moteur> <nom> ♀/♂ », dans une section « <langue>
 Le serveur du PC ne fait tourner que Kokoro, Piper et Qwen3 ; Supertonic et Pocket restent toujours sur le téléphone.
 
 ⚠️ Avant publication : ajouter un écran de crédits. Les extraits de voix Pocket sont sous CC-BY-4.0 (corpus VCTK, Université d'Édimbourg ; Alba MacKenna via Kyutai) et doivent être crédités.
+
+## Lecture expressive (Profil → Apparence)
+- Humeur par phrase (`lib/services/sentence_mood.dart`) : 7 humeurs + une force (légère/marquée). Source : l'IA Qwen de l'ordinateur (TalkTome Boost), analysée **en avance** par lots de 16 sur ~80 phrases (`_prefetchMoods` dans `talktome_audio_handler.dart`, jamais bloquant), mémorisée dans la boîte Hive `mood_cache` ; sinon règles du téléphone (négations gérées, force selon le nombre d'indices). Jeu de 45 phrases étiquetées FR/EN/PT : `test/expressive_reading_test.dart`.
+- `MoodPlanner` : narration à 50 % (l'émotion passe surtout par les répliques), phrase isolée atténuée, vitesse qui change par paliers de 4 % max, intensité réglable (curseur, 0,3 à 1).
+- Voix « émotions » (l'émotion est dans la voix, pas seulement le rythme) : Qwen3-TTS (un extrait par humeur et par voix sur le PC, `qwen_voices\<id>__<humeur>.wav`, meilleur de 3 essais par empreinte vocale) et 6 voix Pocket anglaises qui imitent ces extraits (récupérés depuis le PC via `/voice_ref`, ensuite hors ligne).

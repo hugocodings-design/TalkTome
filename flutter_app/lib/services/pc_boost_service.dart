@@ -425,6 +425,32 @@ class PcBoostService {
     }
   }
 
+  /// Extrait de voix Qwen3-TTS de l'ordinateur ([voiceId] = « qwen3-en-f1 »,
+  /// [mood] = « sad »…), enregistré dans [outPath] pour les voix Pocket
+  /// « émotions ». Faux si l'ordinateur ne répond pas ou n'a pas l'extrait.
+  Future<bool> downloadVoiceRef(String voiceId, String mood, String outPath) async {
+    final b = await base();
+    if (b == null) return false;
+    try {
+      final uri = Uri.parse('$b/voice_ref').replace(
+          queryParameters: {'voice': voiceId, 'mood': mood});
+      final req = await _http.getUrl(uri);
+      req.headers.set('X-Boost-Token', code);
+      final res = await req.close().timeout(const Duration(seconds: 20));
+      final bytes = await _readAll(res).timeout(const Duration(seconds: 30));
+      if (res.statusCode != 200 || bytes.length < 44) return false;
+      final f = File(outPath);
+      await f.parent.create(recursive: true);
+      final tmp = File('$outPath.part');
+      await tmp.writeAsBytes(bytes, flush: true);
+      await tmp.rename(outPath);
+      return true;
+    } catch (e) {
+      debugPrint('[BOOST] extrait $voiceId/$mood indisponible : $e');
+      return false;
+    }
+  }
+
   /// Génération de texte (Qwen) sur l'ordinateur, morceau par morceau.
   /// Lève une exception si l'ordinateur ne répond pas.
   Stream<String> generate({

@@ -35,6 +35,10 @@ final ValueNotifier<double> readerMarginNotifier = ValueNotifier(32.0);
 /// volume et pauses à l'humeur de chaque phrase.
 final ValueNotifier<bool> expressiveReadingNotifier = ValueNotifier(false);
 
+/// Intensité de la lecture expressive (Profil > Apparence), de 0,3 (discrète)
+/// à 1 (marquée).
+final ValueNotifier<double> expressiveIntensityNotifier = ValueNotifier(0.8);
+
 /// Langue dans laquelle Gemini rédige les définitions du dictionnaire.
 /// Code court ISO ('fr', 'en', 'pt', 'es') et non une locale complète comme
 /// pour les voix TTS ('fr-FR'). Réglable séparément de
@@ -161,6 +165,8 @@ void main() async {
       (settings.get('readerMargin', defaultValue: 32.0) as num).toDouble();
   expressiveReadingNotifier.value =
       settings.get('expressiveReading', defaultValue: false) as bool;
+  expressiveIntensityNotifier.value =
+      (settings.get('expressiveIntensity', defaultValue: 0.8) as num).toDouble();
   dictionaryLanguageNotifier.value =
       settings.get('dictionaryLanguage', defaultValue: 'fr') as String;
   translationLanguageNotifier.value =

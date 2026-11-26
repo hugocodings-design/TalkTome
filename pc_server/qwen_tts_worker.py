@@ -73,6 +73,8 @@ DTYPE = torch.float32 if CFG.get('qwen_tts_dtype') == 'float32' else torch.float
 # Délai de veille : celui que Home Connections a donné à TalkTome Boost
 # (« tts_idle_seconds », 0 = jamais), sinon l'ancien réglage en minutes.
 IDLE_SECONDS = float(CFG['tts_idle_seconds']) if 'tts_idle_seconds' in CFG     else 60 * float(CFG.get('qwen_tts_idle_minutes', 10))
+# Essais par voix et par humeur (on garde le plus ressemblant à la voix neutre).
+EMOTION_CANDIDATES = max(1, int(CFG.get('qwen_emotion_candidates', 3)))
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 if DEVICE == 'cpu':
     DTYPE = torch.float32  # le float16 n'est pas utilisable sur processeur
@@ -80,8 +82,14 @@ BASE_MODEL = f'Qwen/Qwen3-TTS-12Hz-{SIZE}-Base'
 # VoiceDesign n'existe qu'en 1.7B ; il ne sert qu'à l'installation.
 DESIGN_MODEL = 'Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign'
 
-VOICES: dict[str, dict] = {
-    v['id']: v for v in json.loads(VOICES_JSON.read_text(encoding='utf-8'))['voices']}
+_SPEC = json.loads(VOICES_JSON.read_text(encoding='utf-8'))
+VOICES: dict[str, dict] = {v['id']: v for v in _SPEC['voices']}
+MOODS: dict[str, dict] = _SPEC.get('moods', {})
+
+
+def ref_path(voice_id: str, mood: str = 'neutral') -> Path:
+    """Extrait de référence d'une voix pour une humeur (neutre : <id>.wav)."""
+    return REF_DIR / (f'{voice_id}.wav' if mood == 'neutral' else f'{voice_id}__{mood}.wav')
 
 
 def _load(name: str):
@@ -100,28 +108,79 @@ def _free(model) -> None:
         torch.cuda.empty_cache()
 
 
+def _cosine(a, b) -> float:
+    a = a.flatten().float()
+    b = b.flatten().float()
+    return float(torch.dot(a, b) / (a.norm() * b.norm() + 1e-9))
+
+
 def prepare() -> None:
-    """Télécharge les modèles et crée les extraits de référence manquants."""
-    missing = [v for v in VOICES.values() if not (REF_DIR / f"{v['id']}.wav").exists()]
-    if missing:
+    """Télécharge les modèles et crée les extraits manquants : la voix neutre,
+    puis un extrait par humeur. Reprend là où il s'était arrêté."""
+    cand_dir = REF_DIR / 'candidates'
+    neutral_missing = [v for v in VOICES.values() if not ref_path(v['id']).exists()]
+    emotion_jobs = [(v, m) for v in VOICES.values() for m in MOODS
+                    if not ref_path(v['id'], m).exists()]
+    if neutral_missing or emotion_jobs:
         design = _load(DESIGN_MODEL)
-        for v in missing:
+        for v in neutral_missing:
             t = time.perf_counter()
             wavs, sr = design.generate_voice_design(
                 text=v['ref_text'], language=v['language'], instruct=v['instruct'])
-            sf.write(REF_DIR / f"{v['id']}.wav", wavs[0], sr)
+            sf.write(ref_path(v['id']), wavs[0], sr)
             (REF_DIR / f"{v['id']}.txt").write_text(v['ref_text'], encoding='utf-8')
-            msg = f"voix créée : {v['id']} ({v['name']}) en {time.perf_counter() - t:.0f} s"
-            log.info(msg)
-            print(msg, flush=True)
+            _say(f"voix créée : {v['id']} ({v['name']}) en {time.perf_counter() - t:.0f} s")
+        # Plusieurs essais par humeur : la description seule ne garantit pas
+        # exactement la même personne, on choisira ensuite le plus proche.
+        cand_dir.mkdir(parents=True, exist_ok=True)
+        for n, (v, m) in enumerate(emotion_jobs, 1):
+            text = MOODS[m]['ref_text'][v['language']]
+            instruct = f"{v['instruct']}. {MOODS[m]['instruct']}"
+            for k in range(EMOTION_CANDIDATES):
+                out = cand_dir / f"{v['id']}__{m}__{k}.wav"
+                if out.exists():
+                    continue
+                wavs, sr = design.generate_voice_design(
+                    text=text, language=v['language'], instruct=instruct)
+                sf.write(out, wavs[0], sr)
+            _say(f"humeur {n}/{len(emotion_jobs)} : {v['id']} {m}")
         _free(design)
-    else:
-        print('Toutes les voix existent déjà.', flush=True)
-    # Télécharge aussi le modèle de lecture, pour que la première phrase
-    # n'attende pas un téléchargement.
+
+    # Choix du meilleur essai par empreinte vocale (modèle Base), puis
+    # téléchargement du modèle de lecture au passage.
     model = _load(BASE_MODEL)
+    if emotion_jobs:
+        def embedding(path: Path):
+            item = model.create_voice_clone_prompt(ref_audio=str(path), x_vector_only_mode=True)[0]
+            return item.ref_spk_embedding
+
+        for v, m in emotion_jobs:
+            neutral = embedding(ref_path(v['id']))
+            best, best_score = None, -2.0
+            for k in range(EMOTION_CANDIDATES):
+                c = cand_dir / f"{v['id']}__{m}__{k}.wav"
+                if not c.exists():
+                    continue
+                score = _cosine(neutral, embedding(c))
+                if score > best_score:
+                    best, best_score = c, score
+            if best is None:
+                continue
+            best.replace(ref_path(v['id'], m))
+            (REF_DIR / f"{v['id']}__{m}.txt").write_text(
+                MOODS[m]['ref_text'][v['language']], encoding='utf-8')
+            for k in range(EMOTION_CANDIDATES):
+                (cand_dir / f"{v['id']}__{m}__{k}.wav").unlink(missing_ok=True)
+            _say(f"humeur gardée : {v['id']} {m} (ressemblance {best_score:.2f})")
     _free(model)
-    print('Qwen3-TTS prêt.', flush=True)
+    if cand_dir.exists() and not any(cand_dir.iterdir()):
+        cand_dir.rmdir()
+    _say('Qwen3-TTS prêt (voix et humeurs).')
+
+
+def _say(msg: str) -> None:
+    log.info(msg)
+    print(msg, flush=True)
 
 
 # ── Serveur local ────────────────────────────────────────────────────────────
@@ -133,6 +192,7 @@ class Req(BaseModel):
     voice: str
     text: str
     speed: float = 1.0
+    mood: str = 'neutral'
 
 
 class Engine:
@@ -148,18 +208,23 @@ class Engine:
             self.prompts.clear()
         return self.model
 
-    def _prompt(self, voice_id: str):
-        p = self.prompts.get(voice_id)
+    def _prompt(self, voice_id: str, mood: str = 'neutral'):
+        # Humeur sans extrait (pas encore préparée) : la voix neutre.
+        if mood != 'neutral' and not ref_path(voice_id, mood).exists():
+            mood = 'neutral'
+        key = f'{voice_id}|{mood}'
+        p = self.prompts.get(key)
         if p is None:
-            wav = REF_DIR / f'{voice_id}.wav'
+            wav = ref_path(voice_id, mood)
             if not wav.exists():
                 raise FileNotFoundError(f'extrait absent : {wav} (lancer --prepare)')
-            ref_text = (REF_DIR / f'{voice_id}.txt').read_text(encoding='utf-8')
+            ref_text = wav.with_suffix('.txt').read_text(encoding='utf-8')
             p = self.model.create_voice_clone_prompt(ref_audio=str(wav), ref_text=ref_text)
-            self.prompts[voice_id] = p
+            self.prompts[key] = p
         return p
 
-    def synthesize(self, voice_id: str, text: str, speed: float) -> tuple[np.ndarray, int]:
+    def synthesize(self, voice_id: str, text: str, speed: float,
+                   mood: str = 'neutral') -> tuple[np.ndarray, int]:
         v = VOICES.get(voice_id)
         if v is None:
             raise KeyError(f'voix inconnue : {voice_id}')
@@ -169,7 +234,7 @@ class Engine:
             with torch.inference_mode():
                 wavs, sr = model.generate_voice_clone(
                     text=text, language=v['language'],
-                    voice_clone_prompt=self._prompt(voice_id))
+                    voice_clone_prompt=self._prompt(voice_id, mood))
             self.last_use = time.monotonic()
         audio = np.asarray(wavs[0], dtype=np.float32).reshape(-1)
         return change_tempo(audio, sr, speed), sr
@@ -213,8 +278,10 @@ def serve() -> None:
 
     @app.get('/health')
     def health():
-        ready = all((REF_DIR / f'{i}.wav').exists() for i in VOICES)
-        return {'ok': True, 'voices_ready': ready, 'device': DEVICE,
+        ready = all(ref_path(i).exists() for i in VOICES)
+        moods_ready = sum(ref_path(i, m).exists() for i in VOICES for m in MOODS)
+        return {'ok': True, 'voices_ready': ready, 'moods_ready': moods_ready,
+                'moods_total': len(VOICES) * len(MOODS), 'device': DEVICE,
                 'model': BASE_MODEL, 'loaded': engine.model is not None}
 
     class IdleReq(BaseModel):
@@ -236,7 +303,7 @@ def serve() -> None:
     def tts(req: Req):
         t = time.perf_counter()
         try:
-            samples, sr = engine.synthesize(req.voice, req.text, req.speed)
+            samples, sr = engine.synthesize(req.voice, req.text, req.speed, req.mood)
         except (KeyError, FileNotFoundError) as e:
             raise HTTPException(status_code=404, detail=str(e))
         if samples.size == 0:

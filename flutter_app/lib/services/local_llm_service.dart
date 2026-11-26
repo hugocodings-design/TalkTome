@@ -349,14 +349,17 @@ class LocalLlmService {
   static const String _moodSystem =
       'You label the emotional tone of sentences from a book, for an expressive '
       'text-to-speech narrator. Labels: neutral, happy, excited, sad, angry, '
-      'scared, calm. Use neutral unless the emotion is clear. Answer with exactly '
-      'one line per numbered sentence, in the form "<number>: <label>", and '
-      'nothing else.';
+      'scared, calm. For dialogue, label the emotion of the character speaking; '
+      'for narration, label the tone of the scene. Use the surrounding sentences: '
+      'emotions usually last for several sentences. Use neutral unless the '
+      'emotion is clear. Add a strength: 1 = mild, 2 = strong. Answer with exactly '
+      'one line per numbered sentence, in the form "<number>: <label> <strength>", '
+      'and nothing else.';
 
   /// Humeur de chaque phrase de [sentences] (null si illisible), ou null si
   /// l'ordinateur (TalkTome Boost) n'est pas joignable. Jamais sur le
   /// téléphone : ce serait trop lent et la voix devrait s'interrompre.
-  Future<List<Mood?>?> classifyMoods(List<String> sentences,
+  Future<List<MoodReading?>?> classifyMoods(List<String> sentences,
       {List<String> context = const []}) async {
     final boost = PcBoostService.instance;
     if (sentences.isEmpty || !await boost.llmAvailable()) return null;
@@ -384,14 +387,14 @@ class LocalLlmService {
     final answer = StringBuffer();
     try {
       await for (final piece in boost.generate(
-          prompt: prompt, maxTokens: 6 * sentences.length + 8, temperature: 0.1)) {
+          prompt: prompt, maxTokens: 8 * sentences.length + 8, temperature: 0.1)) {
         answer.write(piece);
       }
     } catch (e) {
       debugPrint('[LOCAL-LLM] humeurs indisponibles : $e');
       return null;
     }
-    return parseMoodLines(answer.toString(), sentences.length);
+    return parseMoodReadings(answer.toString(), sentences.length);
   }
 }
 

@@ -71,6 +71,9 @@ void main() {
     }
     expect(app.audioHandler, isNotNull, reason: 'lecteur audio non initialisé');
     log('app démarrée');
+    // Lecture expressive activée : humeurs, pauses et volume en plus (sans
+    // ordinateur, les humeurs viennent des règles du téléphone).
+    app.expressiveReadingNotifier.value = true;
 
     // Voix du téléphone : téléchargées comme depuis l'écran « Voix IA ».
     for (final id in {for (final v in _voices) SherpaTtsService.voiceByName(v)!.modelId}) {

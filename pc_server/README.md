@@ -31,6 +31,7 @@ powershell -ExecutionPolicy Bypass -File "pc_server\install_qwen_tts.ps1"
 
 Run it after `install_boost.ps1`. It creates a separate Python environment (`%LOCALAPPDATA%\TalkTomeBoost\venv-qwen`), installs PyTorch for NVIDIA cards, downloads the models (~8 GB) and creates the 18 voices once from their descriptions in `qwen_voices.json` (10–20 minutes the first time), then restarts Boost.
 
+- **Emotions (expressive reading):** each voice also gets one sample per emotion (happy, excited, sad, angry, scared, calm), created from the voice's description plus the emotion's. Three attempts are made per emotion and the one whose voiceprint is closest to the neutral voice is kept (`"qwen_emotion_candidates"` in `config.json`). First install takes about an hour; rerunning the installer resumes where it stopped. The same samples are fetched by the phone for the Pocket "emotions" voices (Profile → AI voices → Fetch from the computer).
 - Graphics memory: the 1.7B model needs about 4–5 GB. On an 8 GB card, if voices fail while Qwen (dictionary AI) is also loaded, add `"qwen_tts_size": "0.6B"` to `config.json` and restart Boost.
 - The model is released from the graphics card after 10 idle minutes (`"qwen_tts_idle_minutes"` in `config.json`).
 - Logs: `qwen_tts.log` and `qwen_worker.log` in `%LOCALAPPDATA%\TalkTomeBoost`.

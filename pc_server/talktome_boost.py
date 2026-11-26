@@ -27,6 +27,7 @@ import glob
 import json
 import logging
 import os
+import re
 import secrets
 import site
 import subprocess
@@ -192,6 +193,7 @@ class TtsRequest(BaseModel):
     kind: str          # 'kokoro' | 'piper' | 'qwen3'
     modelFile: str = ''
     voice: str = ''    # qwen3 : identifiant de la voix (qwen_voices.json)
+    mood: str = 'neutral'  # qwen3 : humeur à exprimer (lecture expressive)
     sid: int = 0
     lang: str = ''
     gb: bool = False
@@ -346,7 +348,8 @@ def _qwen_tts(req: TtsRequest) -> Response:
     t = time.perf_counter()
     try:
         r = httpx.post(f'http://127.0.0.1:{QWEN_PORT}/tts',
-                       json={'voice': req.voice, 'text': req.text, 'speed': req.speed},
+                       json={'voice': req.voice, 'text': req.text, 'speed': req.speed,
+                             'mood': req.mood},
                        timeout=180)
     except httpx.HTTPError as e:
         raise HTTPException(status_code=422, detail=f'Qwen3-TTS : {e}')
@@ -401,6 +404,26 @@ def voices_free(request: Request, x_boost_token: str | None = Header(default=Non
         _free_voices('à la demande')
     _qwen_post('/free')
     return {'ok': True}
+
+
+_VOICE_ID = re.compile(r'^qwen3-[a-z]{2}-[fm][0-9]$')
+_MOODS = {'neutral', 'happy', 'excited', 'sad', 'angry', 'scared', 'calm'}
+
+
+@app.get('/voice_ref')
+def voice_ref(voice: str, request: Request, mood: str = 'neutral',
+              x_boost_token: str | None = Header(default=None)):
+    """Extrait de voix Qwen3-TTS (une humeur), pour les voix Pocket
+    « émotions » du téléphone, qui l'imitent ensuite hors ligne."""
+    check_token(x_boost_token, request)
+    # Noms vérifiés : jamais de chemin libre.
+    if not _VOICE_ID.match(voice) or mood not in _MOODS:
+        raise HTTPException(status_code=400, detail='voix ou humeur invalide')
+    name = f'{voice}.wav' if mood == 'neutral' else f'{voice}__{mood}.wav'
+    path = BASE / 'qwen_voices' / name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f'extrait absent : {name}')
+    return Response(content=path.read_bytes(), media_type='audio/wav')
 
 
 # ── IA locale (Qwen via llama.cpp) ───────────────────────────────────────────

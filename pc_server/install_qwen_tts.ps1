@@ -1,7 +1,8 @@
 # Installe les voix Qwen3-TTS de TalkTome Boost (ordinateur uniquement).
 #  - environnement Python séparé : %LOCALAPPDATA%\TalkTomeBoost\venv-qwen
 #  - PyTorch pour carte NVIDIA (CUDA 12.6), le paquet qwen-tts
-#  - télécharge les modèles (~8 Go) et crée les 18 voix (une fois, ~10-20 min)
+#  - télécharge les modèles (~8 Go), crée les 18 voix et un extrait par humeur
+#    (joyeux, enthousiaste, triste, en colère, effrayé, calme) : ~1 h la première fois
 #  - redémarre TalkTome Boost pour qu'il prenne les voix en charge
 # À lancer APRÈS install_boost.ps1. Peut être relancé sans risque : ce qui
 # existe déjà est gardé (voix comprises).
@@ -39,7 +40,7 @@ Copy-Item (Join-Path $PSScriptRoot 'tempo.py') $base -Force
 
 & $vpy -c "import torch; print('Carte graphique :', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'AUCUNE (processeur, très lent)')"
 
-Write-Output "Téléchargement des modèles et création des voix (long la première fois)..."
+Write-Output "Téléchargement des modèles, création des 18 voix puis de leurs 6 humeurs (3 essais chacune) : environ 1 h la première fois, reprend là où il s'est arrêté si on le relance..."
 & $vpy (Join-Path $base 'qwen_tts_worker.py') --prepare
 if ($LASTEXITCODE -ne 0) { throw "La préparation de Qwen3-TTS a échoué : voir $base\qwen_tts.log" }
 

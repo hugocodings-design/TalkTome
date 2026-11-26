@@ -20,6 +20,19 @@ class _VoiceDownloadScreenState extends State<VoiceDownloadScreen> {
       SherpaTtsService.models.where((m) => m.runsOnPhone).toList();
   final _downloader = VoiceModelDownloader.instance;
   Map<String, bool> _installed = {};
+  bool _fetchingEmotional = false;
+  int? _emotionalCount;
+
+  Future<void> _fetchEmotional() async {
+    setState(() => _fetchingEmotional = true);
+    final n = await SherpaTtsService.instance.fetchEmotionalPocketVoices();
+    if (mounted) {
+      setState(() {
+        _fetchingEmotional = false;
+        _emotionalCount = n;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -194,6 +207,46 @@ class _VoiceDownloadScreenState extends State<VoiceDownloadScreen> {
                     label: Text(l10n.voiceDownloads_installAll(missingMb)),
                   ),
                 ),
+              // Voix Pocket « émotions » : extraits créés par l'ordinateur.
+              Card(
+                margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(l10n.voiceDownloads_emotionalTitle,
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 4),
+                      Text(l10n.voiceDownloads_emotionalHint),
+                      const SizedBox(height: 8),
+                      if (_installed['pocket'] != true)
+                        Text(l10n.voiceDownloads_emotionalNeedsPocket,
+                            style: TextStyle(color: Theme.of(context).colorScheme.error))
+                      else
+                        Row(
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: _fetchingEmotional ? null : _fetchEmotional,
+                              icon: _fetchingEmotional
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.computer_rounded),
+                              label: Text(l10n.voiceDownloads_emotionalFetch),
+                            ),
+                            const SizedBox(width: 12),
+                            if (_emotionalCount != null)
+                              Expanded(
+                                child: Text(l10n.voiceDownloads_emotionalResult(_emotionalCount!)),
+                              ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
               for (final spec in _phoneModels)
                 ListTile(
                   isThreeLine: true,

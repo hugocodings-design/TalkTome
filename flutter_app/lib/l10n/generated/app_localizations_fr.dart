@@ -1067,4 +1067,32 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get voice_pcRequiredBody =>
       'Cette voix (Qwen3-TTS) est générée par votre ordinateur avec TalkTome Boost, qui ne répond pas pour l\'instant. Allumez l\'ordinateur, vérifiez Profil → TalkTome Boost, ou choisissez une voix marquée « téléphone ».';
+
+  @override
+  String get profileScreen_expressiveIntensity => 'Intensité des émotions';
+
+  @override
+  String get profileScreen_expressiveIntensitySubtle => 'Discrète';
+
+  @override
+  String get profileScreen_expressiveIntensityStrong => 'Marquée';
+
+  @override
+  String get voiceDownloads_emotionalTitle => 'Voix Pocket « émotions »';
+
+  @override
+  String get voiceDownloads_emotionalHint =>
+      '6 voix anglaises qui expriment vraiment les émotions. Leurs extraits sont créés par l\'ordinateur (TalkTome Boost avec Qwen3-TTS) : récupérez-les une fois, ensuite tout marche hors ligne.';
+
+  @override
+  String get voiceDownloads_emotionalFetch => 'Récupérer depuis l\'ordinateur';
+
+  @override
+  String voiceDownloads_emotionalResult(int count) {
+    return '$count extraits sur 42 récupérés';
+  }
+
+  @override
+  String get voiceDownloads_emotionalNeedsPocket =>
+      'Téléchargez d\'abord Pocket TTS ci-dessous.';
 }
