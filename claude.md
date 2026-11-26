@@ -64,3 +64,9 @@ Chaque voix s'affiche « <moteur> <nom> ♀/♂ », dans une section « <langue>
 Le serveur du PC ne fait tourner que Kokoro, Piper et Qwen3 ; Supertonic et Pocket restent toujours sur le téléphone.
 
 ⚠️ Avant publication : ajouter un écran de crédits. Les extraits de voix Pocket sont sous CC-BY-4.0 (corpus VCTK, Université d'Édimbourg ; Alba MacKenna via Kyutai) et doivent être crédités.
+
+## APK sur GitHub (téléchargement de l'app)
+- Workflow `.github/workflows/android-apk.yml` : à chaque changement sur `master`, GitHub construit l'APK (debug, arm64) et le publie dans la version **latest** : https://github.com/hugocodings-design/TalkTome/releases/latest (fichier `TalkTome.apk`). Dépôt privé : il faut être connecté à GitHub pour télécharger.
+- Signature : la **clé de débogage du PC de Hugo** (`%USERPROFILE%\.android\debug.keystore`), pour que l'APK téléchargé mette à jour l'app installée sans perdre ses données. Elle est fournie à GitHub par le secret de dépôt `ANDROID_DEBUG_KEYSTORE_BASE64` = le fichier encodé en base64 (Settings → Secrets and variables → Actions). Sans ce secret, la construction sur `master` s'arrête volontairement.
+- Pour la mettre en place (une fois, depuis le PC) : encoder le fichier en base64 (PowerShell : `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.android\debug.keystore"))`) et l'enregistrer comme secret, par exemple avec `gh secret set ANDROID_DEBUG_KEYSTORE_BASE64 --repo hugocodings-design/TalkTome`, puis relancer le workflow (onglet Actions → Android APK → Run workflow).
+- Une clé de débogage ne convient pas au Play Store : une vraie clé de publication sera nécessaire pour la mise en ligne.
