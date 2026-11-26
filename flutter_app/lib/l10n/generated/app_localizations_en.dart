@@ -902,18 +902,29 @@ class AppLocalizationsEn extends AppLocalizations {
       'Use the computer when it\'s reachable';
 
   @override
-  String get profileScreen_boostHosts => 'Computer addresses';
+  String get profileScreen_boostHosts => 'Address';
 
   @override
   String get profileScreen_boostHostsHint =>
-      'Home Connections address (https://…, works anywhere), or Wi-Fi / Tailscale address of TalkTome Boost, comma-separated';
+      'Home Connections address (works on Wi-Fi and mobile data). Old TalkTome Boost Wi-Fi / Tailscale addresses still accepted, comma-separated';
 
   @override
-  String get profileScreen_boostCode =>
-      'Home Connections key (or Boost pairing code)';
+  String get profileScreen_boostCode => 'Key';
 
   @override
   String get profileScreen_boostTest => 'Test';
+
+  @override
+  String get profileScreen_boostCodeHint =>
+      'Home Connections window → Connection → Copy key';
+
+  @override
+  String get profileScreen_boostKeyRefused =>
+      'Key refused by Home Connections — copy it again from the PC';
+
+  @override
+  String get profileScreen_boostBlocked =>
+      'Too many wrong keys — try again in 1 minute';
 
   @override
   String get reader_pageColor => 'PAGE COLOR';

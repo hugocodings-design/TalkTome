@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'word_aligner.dart';
 
 /// État de la connexion à l'ordinateur, pour l'écran de réglages.
-enum PcBoostStatus { off, searching, connected, unreachable }
+enum PcBoostStatus { off, searching, connected, unreachable, keyRefused, blocked }
 
 /// « TalkTome Boost » : quand l'ordinateur de l'utilisateur est joignable
 /// (Wi-Fi de la maison, ou partout via Tailscale), les voix IA et l'IA locale
@@ -34,6 +34,40 @@ class PcBoostService {
 
   static const int defaultPort = 47815;
 
+  /// Adresse Home Connections proposée par défaut (Tailscale Funnel du PC).
+  static const String defaultAddress = 'https://hugo.tail3001ff.ts.net';
+
+  /// Ancienne voie Funnel `https://…/talktome` (TalkTome Boost direct) : on
+  /// ajoute devant elle l'adresse Home Connections du même PC (sans chemin),
+  /// et on la garde en secours tant qu'elle existe.
+  static String migrateHosts(String hosts) {
+    final list = hosts
+        .split(RegExp(r'[,\s]+'))
+        .where((h) => h.isNotEmpty)
+        .toList();
+    final out = <String>[];
+    for (final h in list) {
+      final m = RegExp(r'^(https://[^/]+)/talktome/*$').firstMatch(h);
+      if (m != null && !list.contains(m.group(1)) && !out.contains(m.group(1))) {
+        out.add(m.group(1)!);
+      }
+      if (!out.contains(h)) out.add(h);
+    }
+    return out.join(', ');
+  }
+
+  /// Réponse de `/v1/ping` : l'IA (Qwen) est-elle utilisable ? Endormie, en
+  /// chargement ou arrêtée (« off ») compte : Home Connections la démarre à
+  /// la demande. Seul « missing » (pas installée sur le PC) l'exclut.
+  static bool? hubLlmFromPing(Object? json) {
+    if (json is! Map || json['ok'] != true) return null;
+    final services = json['services'];
+    if (services is! Map) return null;
+    final llm = services['llm'];
+    final state = llm is Map ? llm['state'] : null;
+    return state != null && state != 'missing';
+  }
+
   final ValueNotifier<PcBoostStatus> status = ValueNotifier(PcBoostStatus.off);
 
   /// Adresse de l'ordinateur actuellement utilisée (pour l'affichage).
@@ -45,6 +79,14 @@ class PcBoostService {
       .where((h) => h.isNotEmpty)
       .toList();
   String get code => _box.get('boostCode', defaultValue: '') as String;
+
+  /// Au démarrage : adresse Home Connections ajoutée devant l'ancien
+  /// `/talktome`, et adresse par défaut si aucune n'a été saisie.
+  Future<void> migrateSettings() async {
+    final old = _box.get('boostHosts', defaultValue: '') as String;
+    final migrated = old.trim().isEmpty ? defaultAddress : migrateHosts(old);
+    if (migrated != old) await _box.put('boostHosts', migrated);
+  }
 
   Box get _box => Hive.box('settings');
 
@@ -93,6 +135,7 @@ class PcBoostService {
   bool _hub = false; // _base est Home Connections (sinon TalkTome Boost)
   DateTime _checkedAt = DateTime.fromMillisecondsSinceEpoch(0);
   Future<String?>? _probing;
+  int? _hubRefusal; // 401 / 429 renvoyé par Home Connections au dernier essai
 
   Future<void> configure({
     required bool enabled,
@@ -146,6 +189,7 @@ class PcBoostService {
   /// pu changer (la box en attribue parfois une autre).
   Future<String?> _probe() async {
     status.value = PcBoostStatus.searching;
+    _hubRefusal = null;
     var found = await _firstResponding(hosts);
     if (found == null) {
       final discovered = await _discover();
@@ -156,6 +200,8 @@ class PcBoostService {
     }
     if (found == null) {
       markFailed();
+      if (enabled && _hubRefusal == 401) status.value = PcBoostStatus.keyRefused;
+      if (enabled && _hubRefusal == 429) status.value = PcBoostStatus.blocked;
       return null;
     }
     final (host, b, llm, hub) = found;
@@ -267,13 +313,14 @@ class PcBoostService {
       _hubHeaders(req.headers);
       final res = await req.close().timeout(const Duration(seconds: 8));
       final body = await res.transform(utf8.decoder).join();
+      if (res.statusCode == 401 || res.statusCode == 429) {
+        // 401 : clé refusée ; 429 : trop de mauvaises clés, bloqué 1 min.
+        _hubRefusal = res.statusCode;
+        debugPrint('[BOOST] Home Connections : HTTP ${res.statusCode}');
+        return null;
+      }
       if (res.statusCode != 200) return null;
-      final j = jsonDecode(body) as Map;
-      final services = j['services'];
-      if (j['ok'] != true || services is! Map) return null;
-      final llm = services['llm'];
-      final state = llm is Map ? llm['state'] : null;
-      return state != null && state != 'missing';
+      return hubLlmFromPing(jsonDecode(body));
     } catch (e) {
       debugPrint('[BOOST] Home Connections injoignable à cette adresse : $e');
       return null;
@@ -291,6 +338,38 @@ class PcBoostService {
   bool get viaHomeConnections => _base != null && _hub;
 
   bool _llmReady = false;
+
+  final Map<String, DateTime> _wokenAt = {};
+
+  /// Réveille à l'avance un modèle endormi sur le PC (`POST /v1/wake`), sans
+  /// attendre la réponse : Qwen se recharge pendant que l'utilisateur lit ou
+  /// choisit son mot. Seulement par Home Connections, au plus une fois par
+  /// minute et par modèle.
+  void wake(List<String> models) {
+    final now = DateTime.now();
+    final todo = models
+        .where((m) =>
+            now.difference(_wokenAt[m] ?? DateTime(2000)) > const Duration(minutes: 1))
+        .toList();
+    if (todo.isEmpty) return;
+    unawaited(() async {
+      try {
+        final b = await base();
+        if (b == null || !_hub) return;
+        for (final m in todo) {
+          _wokenAt[m] = now;
+        }
+        final req = await _remoteHttp.postUrl(Uri.parse('$b/v1/wake'));
+        _hubHeaders(req.headers);
+        req.headers.contentType = ContentType.json;
+        req.add(utf8.encode(jsonEncode({'models': todo})));
+        final res = await req.close().timeout(const Duration(seconds: 10));
+        await res.drain<void>();
+      } catch (e) {
+        debugPrint('[BOOST] réveil non envoyé : $e');
+      }
+    }());
+  }
 
   /// L'IA locale tourne-t-elle sur l'ordinateur ?
   Future<bool> llmAvailable() async => await base() != null && _llmReady;
