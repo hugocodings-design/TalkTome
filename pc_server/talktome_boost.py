@@ -14,7 +14,9 @@ Tout vit dans %LOCALAPPDATA%\\TalkTomeBoost :
   models\\tts\\     modèles de voix (mêmes dossiers que sur le téléphone)
   models\\llm\\     qwen3-4b-instruct.gguf
   llama\\           serveur llama.cpp officiel (build CUDA)
-  config.json      code d'appairage + port
+  config.json      code d'appairage + port ; « tts_idle_minutes » (5) et
+                   « llm_idle_minutes » (5) : délais avant de libérer la carte
+                   graphique quand personne ne s'en sert (0 = jamais)
   boost.log        journal
 """
 from __future__ import annotations
@@ -198,6 +200,24 @@ class TtsRequest(BaseModel):
 _tts_engines: dict[str, sherpa_onnx.OfflineTts] = {}
 _tts_lock = threading.Lock()
 _provider = 'cuda'
+_tts_last_use = 0.0  # dernière synthèse Kokoro / Piper (time.monotonic)
+TTS_IDLE_SECONDS = 60 * float(cfg.get('tts_idle_minutes', 5))
+LLM_IDLE_SECONDS = int(60 * float(cfg.get('llm_idle_minutes', 5)))
+
+
+def unload_idle_voices() -> None:
+    """Libère la carte graphique : les voix Kokoro / Piper inutilisées depuis
+    TTS_IDLE_SECONDS sont déchargées ; la phrase suivante les recharge
+    (quelques secondes). Qwen3-TTS a son propre délai (qwen_tts_worker.py)."""
+    if TTS_IDLE_SECONDS <= 0:
+        return
+    while True:
+        time.sleep(30)
+        with _tts_lock:
+            if _tts_engines and time.monotonic() - _tts_last_use > TTS_IDLE_SECONDS:
+                n = len(_tts_engines)
+                _tts_engines.clear()
+                log.info('%d voix déchargée(s) après %d min sans usage', n, TTS_IDLE_SECONDS // 60)
 
 
 def _engine(req: TtsRequest) -> sherpa_onnx.OfflineTts:
@@ -261,10 +281,12 @@ def tts(req: TtsRequest, request: Request, x_boost_token: str | None = Header(de
     check_token(x_boost_token, request)
     if req.kind == 'qwen3':
         return _qwen_tts(req)
+    global _tts_last_use
     t = time.perf_counter()
     with _tts_lock:
         eng = _engine(req)
         audio = eng.generate(req.text, sid=req.sid, speed=req.speed)
+        _tts_last_use = time.monotonic()
     samples = np.asarray(audio.samples, dtype=np.float32)
     if samples.size == 0 or audio.sample_rate <= 0:
         raise HTTPException(status_code=422, detail='synthèse vide')
@@ -342,7 +364,11 @@ def start_llama() -> None:
         return
     _llama_proc = subprocess.Popen(
         [str(LLAMA_EXE), '-m', str(LLM_MODEL), '--host', '127.0.0.1',
-         '--port', str(LLAMA_PORT), '-ngl', '99', '-c', '4096', '--parallel', '1'],
+         '--port', str(LLAMA_PORT), '-ngl', '99', '-c', '4096', '--parallel', '1']
+        # Veille de llama.cpp : la carte graphique est libérée après ce délai,
+        # la demande suivante recharge le modèle (même délai par défaut que
+        # Home Connections, qui garde alors ce llama-server tel quel).
+        + (['--sleep-idle-seconds', str(LLM_IDLE_SECONDS)] if LLM_IDLE_SECONDS > 0 else []),
         cwd=str(LLAMA_EXE.parent),
         stdout=open(BASE / 'llama.log', 'ab'), stderr=subprocess.STDOUT,
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
@@ -414,6 +440,7 @@ def main() -> None:
     start_qwen()
     threading.Thread(target=discovery_responder, daemon=True).start()
     threading.Thread(target=keep_awake, daemon=True).start()
+    threading.Thread(target=unload_idle_voices, daemon=True).start()
     try:
         # proxy_headers=False : Tailscale Funnel ajoute X-Forwarded-For ; s'y fier
         # ferait passer une demande d'Internet pour une demande du Wi-Fi (code à

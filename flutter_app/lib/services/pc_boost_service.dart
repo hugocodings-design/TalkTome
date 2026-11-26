@@ -19,6 +19,15 @@ enum PcBoostStatus { off, searching, connected, unreachable }
 /// même qualité, bien plus vite. Sinon tout se fait sur le téléphone, comme
 /// avant : chaque appel ici renvoie null / lève, et l'appelant se rabat sur
 /// le moteur local.
+///
+/// Deux sortes d'ordinateur :
+///  - **Home Connections** (adresse `https://<pc>.<tailnet>.ts.net`, clé
+///    longue) : la porte d'entrée unique du PC pour toutes les apps. Routes
+///    `/v1/ping`, `/v1/tts`, `/v1/llm`, en-têtes `Authorization: Bearer` et
+///    `X-App: talktome`. Il démarre l'IA à la demande et la met en veille
+///    quand elle ne sert plus (délai réglé dans Home Connections).
+///  - **TalkTome Boost** directement (Wi-Fi, Tailscale, ancien `/talktome`) :
+///    routes `/health`, `/tts`, `/llm`, en-tête `X-Boost-Token`.
 class PcBoostService {
   PcBoostService._();
   static final PcBoostService instance = PcBoostService._();
@@ -81,6 +90,7 @@ class PcBoostService {
       _isRemote(activeHost.value ?? '') ? _remoteHttp : _lanHttp;
 
   String? _base; // http://hôte:port
+  bool _hub = false; // _base est Home Connections (sinon TalkTome Boost)
   DateTime _checkedAt = DateTime.fromMillisecondsSinceEpoch(0);
   Future<String?>? _probing;
 
@@ -99,6 +109,7 @@ class PcBoostService {
   /// Oublie l'adresse retenue : la prochaine demande recherche l'ordinateur.
   void forget() {
     _base = null;
+    _hub = false;
     activeHost.value = null;
     _checkedAt = DateTime.fromMillisecondsSinceEpoch(0);
     status.value = enabled ? PcBoostStatus.searching : PcBoostStatus.off;
@@ -147,8 +158,9 @@ class PcBoostService {
       markFailed();
       return null;
     }
-    final (host, b, llm) = found;
+    final (host, b, llm, hub) = found;
     _base = b;
+    _hub = hub;
     _checkedAt = DateTime.now();
     activeHost.value = host;
     _llmReady = llm;
@@ -156,14 +168,15 @@ class PcBoostService {
     return b;
   }
 
-  /// (adresse, base URL, IA prête) de la première adresse qui répond.
-  Future<(String, String, bool)?> _firstResponding(List<String> list) {
+  /// (adresse, base URL, IA prête, Home Connections) de la première adresse
+  /// qui répond.
+  Future<(String, String, bool, bool)?> _firstResponding(List<String> list) {
     if (list.isEmpty) return Future.value(null);
-    final done = Completer<(String, String, bool)?>();
+    final done = Completer<(String, String, bool, bool)?>();
     var pending = list.length;
     for (final h in list) {
       _probeOne(h).then((ok) {
-        if (ok != null && !done.isCompleted) done.complete((h, ok.$1, ok.$2));
+        if (ok != null && !done.isCompleted) done.complete((h, ok.$1, ok.$2, ok.$3));
         if (--pending == 0 && !done.isCompleted) done.complete(null);
       });
     }
@@ -176,7 +189,7 @@ class PcBoostService {
   /// Diffuse une question sur le Wi-Fi ; l'ordinateur répond avec son port.
   /// Android seulement : sur iPhone, la diffusion réseau exige une
   /// autorisation spéciale d'Apple (adresses saisies et Tailscale à la place).
-  Future<(String, String, bool)?> _discover() async {
+  Future<(String, String, bool, bool)?> _discover() async {
     if (!Platform.isAndroid) return null;
     RawDatagramSocket? sock;
     try {
@@ -218,10 +231,17 @@ class PcBoostService {
     await _box.put('boostHosts', [host, ...kept].join(', '));
   }
 
-  /// (base URL, IA prête) si [h] répond, sinon null.
-  Future<(String, bool)?> _probeOne(String h) async {
+  /// (base URL, IA prête, Home Connections) si [h] répond, sinon null.
+  Future<(String, bool, bool)?> _probeOne(String h) async {
     final b = _baseFor(h);
     final remote = _isRemote(h);
+    // Une adresse https:// sans chemin est d'abord essayée comme Home
+    // Connections ; « …/talktome » (ancien Funnel) et le Wi-Fi vont droit à
+    // TalkTome Boost.
+    if (b.startsWith('https://') && Uri.parse(b).path.isEmpty) {
+      final hub = await _probeHub(b);
+      if (hub != null) return (b, hub, true);
+    }
     try {
       final req = await (remote ? _remoteHttp : _lanHttp).getUrl(Uri.parse('$b/health'));
       req.headers.set('X-Boost-Token', code);
@@ -231,13 +251,44 @@ class PcBoostService {
       final body = await res.transform(utf8.decoder).join();
       if (res.statusCode == 200) {
         final j = jsonDecode(body) as Map;
-        if (j['ok'] == true) return (b, j['llm'] == true);
+        if (j['ok'] == true) return (b, j['llm'] == true, false);
       }
     } catch (e) {
       debugPrint('[BOOST] $h injoignable : $e');
     }
     return null;
   }
+
+  /// IA disponible (même endormie : Home Connections la réveille) si [b] est
+  /// Home Connections et accepte la clé, sinon null.
+  Future<bool?> _probeHub(String b) async {
+    try {
+      final req = await _remoteHttp.getUrl(Uri.parse('$b/v1/ping'));
+      _hubHeaders(req.headers);
+      final res = await req.close().timeout(const Duration(seconds: 8));
+      final body = await res.transform(utf8.decoder).join();
+      if (res.statusCode != 200) return null;
+      final j = jsonDecode(body) as Map;
+      final services = j['services'];
+      if (j['ok'] != true || services is! Map) return null;
+      final llm = services['llm'];
+      final state = llm is Map ? llm['state'] : null;
+      return state != null && state != 'missing';
+    } catch (e) {
+      debugPrint('[BOOST] Home Connections injoignable à cette adresse : $e');
+      return null;
+    }
+  }
+
+  void _hubHeaders(HttpHeaders h) => h
+    ..set(HttpHeaders.authorizationHeader, 'Bearer $code')
+    ..set('X-App', 'talktome');
+
+  void _authHeaders(HttpHeaders h) =>
+      _hub ? _hubHeaders(h) : h.set('X-Boost-Token', code);
+
+  /// Home Connections ?
+  bool get viaHomeConnections => _base != null && _hub;
 
   bool _llmReady = false;
 
@@ -257,13 +308,15 @@ class PcBoostService {
     final b = await base();
     if (b == null) return null;
     try {
-      final req = await _http.postUrl(Uri.parse('$b/tts'));
-      req.headers
-        ..set('X-Boost-Token', code)
-        ..contentType = ContentType.json;
+      final req = await _http.postUrl(Uri.parse(_hub ? '$b/v1/tts' : '$b/tts'));
+      _authHeaders(req.headers);
+      req.headers.contentType = ContentType.json;
       req.add(utf8.encode(jsonEncode({...voiceSpec, 'text': text, 'speed': speed})));
-      final res = await req.close().timeout(timeout);
-      final bytes = await _readAll(res).timeout(timeout);
+      // Home Connections : la voix a pu être libérée de la carte graphique
+      // (veille), son rechargement prend quelques secondes de plus.
+      final wait = _hub ? timeout + const Duration(seconds: 20) : timeout;
+      final res = await req.close().timeout(wait);
+      final bytes = await _readAll(res).timeout(wait);
       if (res.statusCode != 200) {
         // 422 : phrase impossible à synthétiser (ponctuation seule…) — ce
         // n'est pas une panne de l'ordinateur, on le garde.
@@ -302,10 +355,9 @@ class PcBoostService {
   }) async* {
     final b = await base();
     if (b == null) throw StateError('ordinateur injoignable');
-    final req = await _http.postUrl(Uri.parse('$b/llm'));
-    req.headers
-      ..set('X-Boost-Token', code)
-      ..contentType = ContentType.json;
+    final req = await _http.postUrl(Uri.parse(_hub ? '$b/v1/llm' : '$b/llm'));
+    _authHeaders(req.headers);
+    req.headers.contentType = ContentType.json;
     req.add(utf8.encode(jsonEncode({
       'prompt': prompt,
       'n_predict': maxTokens,
@@ -314,7 +366,11 @@ class PcBoostService {
       'top_p': 0.8,
       'min_p': 0.0,
     })));
-    final res = await req.close().timeout(const Duration(seconds: 15));
+    // Home Connections démarre ou réveille l'IA si elle dormait (jusqu'à
+    // ~60 s la première fois) avant de répondre.
+    final res = await req
+        .close()
+        .timeout(Duration(seconds: _hub ? 75 : 15));
     if (res.statusCode != 200) {
       if (res.statusCode == 503) _llmReady = false;
       throw StateError('IA de l\'ordinateur indisponible (${res.statusCode})');

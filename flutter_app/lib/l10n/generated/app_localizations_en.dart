@@ -906,11 +906,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileScreen_boostHostsHint =>
-      'Wi-Fi, Tailscale or Funnel https address (anywhere, no Tailscale), comma-separated';
+      'Home Connections address (https://…, works anywhere), or Wi-Fi / Tailscale address of TalkTome Boost, comma-separated';
 
   @override
   String get profileScreen_boostCode =>
-      'Pairing code (6 digits) or long key (Funnel)';
+      'Home Connections key (or Boost pairing code)';
 
   @override
   String get profileScreen_boostTest => 'Test';

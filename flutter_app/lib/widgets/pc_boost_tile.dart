@@ -89,7 +89,7 @@ class _PcBoostTileState extends State<PcBoostTile> {
                 decoration: InputDecoration(
                   labelText: l10n.profileScreen_boostHosts,
                   helperText: l10n.profileScreen_boostHostsHint,
-                  hintText: '192.168.0.18, https://pc.tailXXXX.ts.net/talktome',
+                  hintText: 'https://pc.tailXXXX.ts.net',
                 ),
                 keyboardType: TextInputType.url,
                 onSubmitted: (_) => apply(),

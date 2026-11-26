@@ -914,11 +914,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get profileScreen_boostHostsHint =>
-      'Wi-Fi, Tailscale ou adresse https Funnel (partout, sans Tailscale), séparées par des virgules';
+      'Adresse Home Connections (https://…, marche partout), ou adresse Wi-Fi / Tailscale de TalkTome Boost, séparées par des virgules';
 
   @override
   String get profileScreen_boostCode =>
-      'Code d\'appairage (6 chiffres) ou clé longue (Funnel)';
+      'Clé Home Connections (ou code d’appairage Boost)';
 
   @override
   String get profileScreen_boostTest => 'Tester';

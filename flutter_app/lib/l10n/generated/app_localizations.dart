@@ -1499,13 +1499,13 @@ abstract class AppLocalizations {
   /// No description provided for @profileScreen_boostHostsHint.
   ///
   /// In fr, this message translates to:
-  /// **'Wi-Fi, Tailscale ou adresse https Funnel (partout, sans Tailscale), séparées par des virgules'**
+  /// **'Adresse Home Connections (https://…, marche partout), ou adresse Wi-Fi / Tailscale de TalkTome Boost, séparées par des virgules'**
   String get profileScreen_boostHostsHint;
 
   /// No description provided for @profileScreen_boostCode.
   ///
   /// In fr, this message translates to:
-  /// **'Code d\'appairage (6 chiffres) ou clé longue (Funnel)'**
+  /// **'Clé Home Connections (ou code d’appairage Boost)'**
   String get profileScreen_boostCode;
 
   /// No description provided for @profileScreen_boostTest.
