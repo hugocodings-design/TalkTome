@@ -9,6 +9,7 @@ import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 import 'audio_cleanup.dart';
 import 'pc_boost_service.dart';
+import 'speech_expander.dart' show pauseMarkerPattern;
 import 'word_aligner.dart';
 
 /// Moteurs de synthèse. Tous tournent sur le téléphone, sauf [qwen3] qui
@@ -858,6 +859,77 @@ class SherpaTtsService {
 
   /// Extrait de voix (Pocket TTS) absent — modèle installé avant l'ajout de
   /// cette voix : téléchargé une fois, à la première phrase.
+  Future<SherpaSynthesis> _synthesizeWithPauses({
+    required String text,
+    required String voiceName,
+    required String outPath,
+    required double speed,
+    String? emotion,
+  }) async {
+    // Morceaux de texte et silence après chacun.
+    final pieces = <(String, int)>[];
+    var last = 0;
+    for (final m in pauseMarkerPattern.allMatches(text)) {
+      pieces.add((text.substring(last, m.start).trim(), int.parse(m.group(1)!)));
+      last = m.end;
+    }
+    pieces.add((text.substring(last).trim(), 0));
+
+    // Pocket invente des sons sur un morceau d'un ou deux mots (« Well »
+    // seul) : on le recolle au suivant avec une virgule, pause naturelle.
+    if (voiceByName(voiceName)?.modelId == 'pocket') {
+      for (var i = 0; i < pieces.length - 1; i++) {
+        final words = pieces[i].$1.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+        if (words > 0 && words < 3) {
+          final joined = '${pieces[i].$1.replaceFirst(RegExp(r'[,;:]$'), '')}, ${pieces[i + 1].$1}';
+          pieces[i + 1] = (joined, pieces[i + 1].$2);
+          pieces[i] = ('', 0);
+        }
+      }
+    }
+
+    final audio = <double>[];
+    final times = <double>[];
+    var rate = 0;
+    var pending = 0; // silence à insérer avant le prochain morceau
+    final temps = <File>[];
+    try {
+      for (var i = 0; i < pieces.length; i++) {
+        final (piece, pauseMs) = pieces[i];
+        if (piece.isEmpty) {
+          pending += pauseMs;
+          continue;
+        }
+        final tmp = File('$outPath.part$i.wav');
+        temps.add(tmp);
+        final res = await synthesizeToFile(
+            text: piece, voiceName: voiceName, outPath: tmp.path, speed: speed, emotion: emotion);
+        var (samples, sr) = _readWavMono(tmp.path);
+        // Chaque morceau garde déjà ~200 ms de silence final : on le réduit
+        // pour que la pause entendue soit celle demandée (le début est
+        // laissé tel quel, les temps des mots en dépendent).
+        if (pauseMs > 0) samples = trimSilence(samples, sr, leadMs: 1 << 20, trailMs: 40);
+        if (rate == 0) rate = sr;
+        if (audio.isNotEmpty && pending > 0) {
+          audio.addAll(List.filled(rate * pending ~/ 1000, 0.0));
+        }
+        final offset = audio.length / rate;
+        times.addAll(res.wordStarts.map((t) => t + offset));
+        audio.addAll(samples);
+        pending = pauseMs;
+      }
+      if (rate == 0) throw Exception('Synthèse vide');
+      File(outPath).writeAsBytesSync(_wavBytes(Float32List.fromList(audio), rate));
+      return SherpaSynthesis(times, audio.length / rate);
+    } finally {
+      for (final f in temps) {
+        try {
+          f.deleteSync();
+        } catch (_) {}
+      }
+    }
+  }
+
   /// Extrait de l'humeur [emotion] pour une voix Pocket « émotions » : celui
   /// de l'humeur s'il est là (ou récupérable sur l'ordinateur), sinon le
   /// neutre.
@@ -992,6 +1064,13 @@ class SherpaTtsService {
     double speed = 1.0,
     String? emotion,
   }) async {
+    // Pauses voulues au milieu de la phrase (tiret, points de suspension…) :
+    // chaque morceau est dit à part, puis assemblé avec un vrai silence —
+    // pareil pour tous les moteurs, sur le téléphone comme sur l'ordinateur.
+    if (pauseMarkerPattern.hasMatch(text)) {
+      return _synthesizeWithPauses(
+          text: text, voiceName: voiceName, outPath: outPath, speed: speed, emotion: emotion);
+    }
     final voice = voiceByName(voiceName);
     if (voice == null) {
       throw Exception('Voix IA locale inconnue : $voiceName');

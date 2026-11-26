@@ -10,6 +10,7 @@ import '../main.dart' show appLocaleNotifier, expressiveReadingNotifier, express
 import 'local_llm_service.dart';
 import 'sentence_mood.dart';
 import 'sherpa_tts_service.dart';
+import 'speech_expander.dart';
 import 'speech_text_normalizer.dart';
 import 'tts_audio_cache.dart';
 import 'wav_silence.dart';
@@ -601,8 +602,14 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
 
         TtsClip? clip;
         try {
-          clip = await _synthesize(toSpeak, voice, speed, profile,
-              emotion: SherpaTtsService.isEmotionalVoice(voice) ? mood : null);
+          // Ce que la voix dit vraiment : abréviations, nombres, symboles,
+          // chiffres romains en toutes lettres, et vraies pauses (tirets,
+          // points de suspension…). Le surlignage reste sur les mots du livre.
+          final spoken = SpeechExpander.expand(toSpeak, _langCodeOf(voice));
+          clip = await _synthesize(spoken.text, voice, speed, profile,
+              emotion: SherpaTtsService.isEmotionalVoice(voice) ? mood : null,
+              wordMap: spoken,
+              sentencePauseMs: SpeechExpander.trailingPauseMs(text));
         } catch (e) {
           debugPrint('[TTS] ⚠ synthèse phrase $index échouée : $e');
         }
@@ -649,22 +656,32 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
   ///
   /// [emotion] : pour les voix capables d'émotion (Qwen3-TTS, Pocket
   /// émotionnel), l'humeur que la voix elle-même doit exprimer.
+  ///
+  /// [wordMap] : lien entre les mots dits et les mots du livre (les temps de
+  /// début sont ramenés aux mots du livre pour le surlignage).
+  /// [sentencePauseMs] : silence voulu après la phrase selon sa ponctuation.
   Future<TtsClip> _synthesize(
       String text, String voice, double baseSpeed, MoodProfile mood,
-      {Mood? emotion}) async {
+      {Mood? emotion, SpokenText? wordMap, int sentencePauseMs = 0}) async {
     final speed = _round(baseSpeed * mood.speedFactor);
-    final pauseMs = mood.pauseAfterMs;
+    // Le moteur garde déjà ~200 ms de silence en fin de phrase (voir
+    // audio_cleanup) ; on complète jusqu'à la pause voulue, plus celle de
+    // l'humeur.
+    final pauseMs = mood.pauseAfterMs + math.max<int>(0, sentencePauseMs - 200);
     final cache = TtsAudioCache.instance;
     // La même phrase dite tristement ou joyeusement : deux fichiers distincts.
     final cacheVoice = emotion == null || emotion == Mood.neutral
         ? voice
         : '$voice#${emotion.name}';
-    final cached = await cache.get(cacheVoice, speed, text, pauseMs: pauseMs);
+    // Le nombre de mots du livre fait partie de la clé : les temps gardés sont
+    // ceux de ces mots-là.
+    final cacheText = wordMap == null ? text : '$text#${wordMap.originalWordCount}';
+    final cached = await cache.get(cacheVoice, speed, cacheText, pauseMs: pauseMs);
     if (cached != null) return cached.withMood(baseSpeed, mood);
     if (!SherpaTtsService.isSherpaVoice(voice)) {
       throw Exception('Voix non disponible : $voice');
     }
-    final path = await cache.wavPathFor(cacheVoice, speed, text, pauseMs: pauseMs);
+    final path = await cache.wavPathFor(cacheVoice, speed, cacheText, pauseMs: pauseMs);
     final res = await SherpaTtsService.instance.synthesizeToFile(
       text: text,
       voiceName: voice,
@@ -680,9 +697,10 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
         debugPrint('[TTS] pause après la phrase impossible : $e');
       }
     }
+    final starts = wordMap == null ? res.wordStarts : wordMap.mapStarts(res.wordStarts);
     final clip = TtsClip(
       path: path,
-      wordStarts: res.wordStarts,
+      wordStarts: starts,
       duration: duration,
       speed: speed,
       baseSpeed: baseSpeed,
@@ -691,6 +709,11 @@ class TalkTomeAudioHandler extends BaseAudioHandler {
     await cache.put(clip);
     return clip;
   }
+
+  /// Langue complète d'une voix (« en-US », « pt-PT »…), pour lire les
+  /// nombres et abréviations comme dans ce pays.
+  String _langCodeOf(String voice) =>
+      SherpaTtsService.voiceByName(voice)?.languageCode ?? _languageCode;
 
   /// Langue d'une voix, en code court (« fr », « en », « pt »).
   String _langOf(String voice) =>

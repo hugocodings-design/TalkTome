@@ -12,6 +12,7 @@ import '../models/ebook.dart';
 import '../models/annotation.dart';
 import '../services/tts_service.dart' show Voice;
 import '../services/sherpa_tts_service.dart';
+import '../services/speech_expander.dart';
 import '../services/dictionary_service.dart';
 import '../services/translation_service.dart';
 import '../services/local_llm_service.dart';
@@ -3203,12 +3204,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
         .where((s) => s.isNotEmpty)
         .toList();
 
+    // Recolle ce qui a été coupé après une abréviation ou une initiale
+    // (« Mr. Jones », « M. Dupont », « J. K. Rowling », « e.g. ») : sinon la
+    // voix s'arrête net au milieu de la phrase.
+    final joined = <String>[];
+    for (final s in rawSentences) {
+      if (joined.isNotEmpty && SpeechExpander.continuesAfter(joined.last, s)) {
+        joined[joined.length - 1] = '${joined.last} $s';
+      } else {
+        joined.add(s);
+      }
+    }
+
     // Filet de sécurité : si un morceau reste quand même très long (texte
     // sans ponctuation de fin détectée), le redécouper pour éviter un appel
     // TTS unique portant sur un pavé de texte — source de longues pauses.
     const maxChunkLength = 220;
     final result = <String>[];
-    for (final sentence in rawSentences) {
+    for (final sentence in joined) {
       result.addAll(_splitLongChunk(sentence, maxChunkLength));
     }
     return _mergeContentlessFragments(result);
