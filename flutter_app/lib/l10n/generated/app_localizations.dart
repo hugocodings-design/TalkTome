@@ -1493,19 +1493,19 @@ abstract class AppLocalizations {
   /// No description provided for @profileScreen_boostHosts.
   ///
   /// In fr, this message translates to:
-  /// **'Adresses de l\'ordinateur'**
+  /// **'Adresse'**
   String get profileScreen_boostHosts;
 
   /// No description provided for @profileScreen_boostHostsHint.
   ///
   /// In fr, this message translates to:
-  /// **'Wi-Fi et Tailscale, séparées par des virgules'**
+  /// **'Adresse Home Connections (marche en Wi-Fi comme en 4G/5G). Anciennes adresses Wi-Fi / Tailscale de TalkTome Boost acceptées, séparées par des virgules'**
   String get profileScreen_boostHostsHint;
 
   /// No description provided for @profileScreen_boostCode.
   ///
   /// In fr, this message translates to:
-  /// **'Code d\'appairage (6 chiffres)'**
+  /// **'Clé'**
   String get profileScreen_boostCode;
 
   /// No description provided for @profileScreen_boostTest.
@@ -1513,6 +1513,24 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Tester'**
   String get profileScreen_boostTest;
+
+  /// No description provided for @profileScreen_boostCodeHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Fenêtre Home Connections → Connexion → Copier la clé'**
+  String get profileScreen_boostCodeHint;
+
+  /// No description provided for @profileScreen_boostKeyRefused.
+  ///
+  /// In fr, this message translates to:
+  /// **'Clé refusée par Home Connections — recopiez-la depuis le PC'**
+  String get profileScreen_boostKeyRefused;
+
+  /// No description provided for @profileScreen_boostBlocked.
+  ///
+  /// In fr, this message translates to:
+  /// **'Trop d’essais avec une mauvaise clé — réessayez dans 1 minute'**
+  String get profileScreen_boostBlocked;
 
   /// No description provided for @reader_pageColor.
   ///

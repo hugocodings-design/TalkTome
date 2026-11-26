@@ -179,6 +179,7 @@ void main() async {
 
   // TalkTome Boost : appairage déposé par adb (développement), puis
   // recherche de l'ordinateur en arrière-plan.
+  await PcBoostService.instance.migrateSettings();
   await PcBoostService.instance.importPairingFileIfAny();
   if (PcBoostService.instance.enabled) {
     unawaited(PcBoostService.instance.base(force: true));

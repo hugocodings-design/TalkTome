@@ -910,17 +910,29 @@ class AppLocalizationsFr extends AppLocalizations {
       'Utiliser l\'ordinateur quand il est joignable';
 
   @override
-  String get profileScreen_boostHosts => 'Adresses de l\'ordinateur';
+  String get profileScreen_boostHosts => 'Adresse';
 
   @override
   String get profileScreen_boostHostsHint =>
-      'Wi-Fi et Tailscale, séparées par des virgules';
+      'Adresse Home Connections (marche en Wi-Fi comme en 4G/5G). Anciennes adresses Wi-Fi / Tailscale de TalkTome Boost acceptées, séparées par des virgules';
 
   @override
-  String get profileScreen_boostCode => 'Code d\'appairage (6 chiffres)';
+  String get profileScreen_boostCode => 'Clé';
 
   @override
   String get profileScreen_boostTest => 'Tester';
+
+  @override
+  String get profileScreen_boostCodeHint =>
+      'Fenêtre Home Connections → Connexion → Copier la clé';
+
+  @override
+  String get profileScreen_boostKeyRefused =>
+      'Clé refusée par Home Connections — recopiez-la depuis le PC';
+
+  @override
+  String get profileScreen_boostBlocked =>
+      'Trop d’essais avec une mauvaise clé — réessayez dans 1 minute';
 
   @override
   String get reader_pageColor => 'COULEUR DE PAGE';

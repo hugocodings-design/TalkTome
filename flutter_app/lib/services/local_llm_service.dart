@@ -110,8 +110,11 @@ class LocalLlmService {
     final active = _activeDone;
     if (active != null && !active.isCompleted) return;
     // L'ordinateur s'en charge : inutile d'occuper ~3 Go de mémoire sur le
-    // téléphone.
-    if (await PcBoostService.instance.llmAvailable()) return;
+    // téléphone. Home Connections : on réveille Qwen s'il dormait.
+    if (await PcBoostService.instance.llmAvailable()) {
+      PcBoostService.instance.wake(const ['llm']);
+      return;
+    }
     if (!await isInstalled()) return;
     _warming = true;
     try {

@@ -14,7 +14,11 @@ Tout vit dans %LOCALAPPDATA%\\TalkTomeBoost :
   models\\tts\\     modèles de voix (mêmes dossiers que sur le téléphone)
   models\\llm\\     qwen3-4b-instruct.gguf
   llama\\           serveur llama.cpp officiel (build CUDA)
-  config.json      code d'appairage + port
+  config.json      code d'appairage + port ; « tts_idle_seconds » (300) et
+                   « llm_idle_minutes » (5) : délais avant de libérer la carte
+                   graphique quand personne ne s'en sert (0 = jamais).
+                   Home Connections règle le délai des voix (POST /voices/idle)
+                   et les libère à la demande (POST /voices/free).
   boost.log        journal
 """
 from __future__ import annotations
@@ -68,7 +72,7 @@ import httpx  # noqa: E402
 import numpy as np  # noqa: E402
 import sherpa_onnx  # noqa: E402
 import uvicorn  # noqa: E402
-from fastapi import FastAPI, Header, HTTPException  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Request  # noqa: E402
 from fastapi.responses import Response, StreamingResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
@@ -90,6 +94,11 @@ def load_config() -> dict:
     if not cfg.get('port'):
         cfg['port'] = 47815
         changed = True
+    if not cfg.get('remote_key'):
+        # Clé longue pour l'accès depuis Internet (Tailscale Funnel) : 6 chiffres
+        # se devinent, 256 bits non.
+        cfg['remote_key'] = secrets.token_urlsafe(32)
+        changed = True
     if changed:
         CONFIG.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
     return cfg
@@ -102,11 +111,34 @@ app = FastAPI(title='TalkTome Boost', version=str(VERSION))
 _last_use = 0.0  # dernière demande réussie d'un téléphone (time.monotonic)
 
 
-def check_token(token: str | None) -> None:
-    global _last_use
-    if not token or not secrets.compare_digest(token, cfg['token']):
+LOOPBACK = {'127.0.0.1', '::1', 'localhost'}
+_guard_lock = threading.Lock()
+_bad_keys: list[float] = []  # mauvaises clés venues par Funnel (minute glissante)
+_locked_until = 0.0
+
+
+def check_token(token: str | None, request: Request) -> None:
+    """Wi-Fi / Tailscale : code à 6 chiffres ou clé longue. Par Tailscale Funnel
+    (Internet), la demande arrive de 127.0.0.1 : seule la clé longue est acceptée,
+    et 10 mauvaises clés en une minute bloquent Funnel une minute."""
+    global _last_use, _locked_until
+    funnel = (request.client.host if request.client else '') in LOOPBACK
+    now = time.monotonic()
+    if funnel and now < _locked_until:
+        raise HTTPException(status_code=429, detail='trop d\'essais, réessayez dans une minute')
+    ok = bool(token) and secrets.compare_digest(token.encode(), cfg['remote_key'].encode())
+    if not ok and not funnel:
+        ok = bool(token) and secrets.compare_digest(token.encode(), cfg['token'].encode())
+    if not ok:
+        if funnel:
+            with _guard_lock:
+                _bad_keys[:] = [t for t in _bad_keys if now - t < 60] + [now]
+                if len(_bad_keys) >= 10:
+                    _locked_until = now + 60
+                    _bad_keys.clear()
+                    log.warning('Funnel : 10 mauvaises clés en une minute, bloqué 1 min')
         raise HTTPException(status_code=401, detail='code incorrect')
-    _last_use = time.monotonic()
+    _last_use = now
 
 
 # ── Connexion stable ─────────────────────────────────────────────────────────
@@ -172,6 +204,37 @@ class TtsRequest(BaseModel):
 _tts_engines: dict[str, sherpa_onnx.OfflineTts] = {}
 _tts_lock = threading.Lock()
 _provider = 'cuda'
+_tts_last_use = 0.0  # dernière synthèse Kokoro / Piper (time.monotonic)
+LLM_IDLE_SECONDS = int(60 * float(cfg.get('llm_idle_minutes', 5)))
+
+
+def _initial_tts_idle() -> int:
+    if 'tts_idle_seconds' in cfg:
+        return int(cfg['tts_idle_seconds'])
+    return int(60 * float(cfg.get('tts_idle_minutes', 5)))
+
+
+_tts_idle_s = _initial_tts_idle()  # 0 = jamais
+
+
+def _free_voices(reason: str) -> int:
+    """Décharge les voix Kokoro / Piper (à appeler avec _tts_lock)."""
+    n = len(_tts_engines)
+    if n:
+        _tts_engines.clear()
+        log.info('%d voix déchargée(s) %s', n, reason)
+    return n
+
+
+def unload_idle_voices() -> None:
+    """Libère la carte graphique : les voix Kokoro / Piper inutilisées depuis
+    _tts_idle_s sont déchargées ; la phrase suivante les recharge (quelques
+    secondes). Qwen3-TTS reçoit le même délai (qwen_tts_worker.py)."""
+    while True:
+        time.sleep(15)
+        with _tts_lock:
+            if _tts_idle_s > 0 and _tts_engines and time.monotonic() - _tts_last_use > _tts_idle_s:
+                _free_voices(f'après {_tts_idle_s} s sans usage')
 
 
 def _engine(req: TtsRequest) -> sherpa_onnx.OfflineTts:
@@ -231,14 +294,16 @@ def _wav(samples: np.ndarray, sr: int) -> bytes:
 
 
 @app.post('/tts')
-def tts(req: TtsRequest, x_boost_token: str | None = Header(default=None)):
-    check_token(x_boost_token)
+def tts(req: TtsRequest, request: Request, x_boost_token: str | None = Header(default=None)):
+    check_token(x_boost_token, request)
     if req.kind == 'qwen3':
         return _qwen_tts(req)
+    global _tts_last_use
     t = time.perf_counter()
     with _tts_lock:
         eng = _engine(req)
         audio = eng.generate(req.text, sid=req.sid, speed=req.speed)
+        _tts_last_use = time.monotonic()
     samples = np.asarray(audio.samples, dtype=np.float32)
     if samples.size == 0 or audio.sample_rate <= 0:
         raise HTTPException(status_code=422, detail='synthèse vide')
@@ -294,16 +359,63 @@ def _qwen_tts(req: TtsRequest) -> Response:
     return Response(content=r.content, media_type='audio/wav')
 
 
+def _qwen_post(path: str, body: dict | None = None) -> None:
+    if not _qwen_http_ok():
+        return
+    try:
+        httpx.post(f'http://127.0.0.1:{QWEN_PORT}{path}', json=body or {}, timeout=10)
+    except httpx.HTTPError:
+        log.warning('Qwen3-TTS : %s impossible', path)
+
+
+def _qwen_loaded() -> bool:
+    try:
+        r = httpx.get(f'http://127.0.0.1:{QWEN_PORT}/health', timeout=0.5)
+        return r.status_code == 200 and bool(r.json().get('loaded'))
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
+class IdleRequest(BaseModel):
+    seconds: int
+
+
+@app.post('/voices/idle')
+def voices_idle(req: IdleRequest, request: Request, x_boost_token: str | None = Header(default=None)):
+    """Délai avant de libérer la carte graphique (Kokoro, Piper, Qwen3-TTS), réglé
+    par Home Connections ; gardé dans config.json pour le prochain démarrage."""
+    global _tts_idle_s
+    check_token(x_boost_token, request)
+    if req.seconds < 0 or req.seconds > 24 * 3600:
+        raise HTTPException(status_code=400, detail='délai invalide')
+    _tts_idle_s = req.seconds
+    cfg['tts_idle_seconds'] = req.seconds
+    CONFIG.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
+    _qwen_post('/idle', {'seconds': req.seconds})
+    log.info('voix : veille après %s s', req.seconds or 'jamais')
+    return {'ok': True, 'tts_idle': _tts_idle_s}
+
+
+@app.post('/voices/free')
+def voices_free(request: Request, x_boost_token: str | None = Header(default=None)):
+    """« Libérer maintenant » : décharge toutes les voix (rechargées à la phrase suivante)."""
+    check_token(x_boost_token, request)
+    with _tts_lock:
+        _free_voices('à la demande')
+    _qwen_post('/free')
+    return {'ok': True}
+
+
 _VOICE_ID = re.compile(r'^qwen3-[a-z]{2}-[fm][0-9]$')
 _MOODS = {'neutral', 'happy', 'excited', 'sad', 'angry', 'scared', 'calm'}
 
 
 @app.get('/voice_ref')
-def voice_ref(voice: str, mood: str = 'neutral',
+def voice_ref(voice: str, request: Request, mood: str = 'neutral',
               x_boost_token: str | None = Header(default=None)):
     """Extrait de voix Qwen3-TTS (une humeur), pour les voix Pocket
     « émotions » du téléphone, qui l'imitent ensuite hors ligne."""
-    check_token(x_boost_token)
+    check_token(x_boost_token, request)
     # Noms vérifiés : jamais de chemin libre.
     if not _VOICE_ID.match(voice) or mood not in _MOODS:
         raise HTTPException(status_code=400, detail='voix ou humeur invalide')
@@ -337,7 +449,11 @@ def start_llama() -> None:
         return
     _llama_proc = subprocess.Popen(
         [str(LLAMA_EXE), '-m', str(LLM_MODEL), '--host', '127.0.0.1',
-         '--port', str(LLAMA_PORT), '-ngl', '99', '-c', '4096', '--parallel', '1'],
+         '--port', str(LLAMA_PORT), '-ngl', '99', '-c', '4096', '--parallel', '1']
+        # Veille de llama.cpp : la carte graphique est libérée après ce délai,
+        # la demande suivante recharge le modèle (même délai par défaut que
+        # Home Connections, qui garde alors ce llama-server tel quel).
+        + (['--sleep-idle-seconds', str(LLM_IDLE_SECONDS)] if LLM_IDLE_SECONDS > 0 else []),
         cwd=str(LLAMA_EXE.parent),
         stdout=open(BASE / 'llama.log', 'ab'), stderr=subprocess.STDOUT,
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
@@ -361,8 +477,8 @@ class LlmRequest(BaseModel):
 
 
 @app.post('/llm')
-async def llm(req: LlmRequest, x_boost_token: str | None = Header(default=None)):
-    check_token(x_boost_token)
+async def llm(req: LlmRequest, request: Request, x_boost_token: str | None = Header(default=None)):
+    check_token(x_boost_token, request)
     if not llama_ready():
         raise HTTPException(status_code=503, detail='IA locale pas prête')
     body = {
@@ -396,10 +512,13 @@ async def llm(req: LlmRequest, x_boost_token: str | None = Header(default=None))
 
 
 @app.get('/health')
-def health(x_boost_token: str | None = Header(default=None)):
-    check_token(x_boost_token)
+def health(request: Request, x_boost_token: str | None = Header(default=None)):
+    check_token(x_boost_token, request)
+    qwen = _qwen_http_ok()
     return {'ok': True, 'version': VERSION, 'tts': _provider, 'llm': llama_ready(),
-            'qwen3': _qwen_http_ok()}
+            'qwen3': qwen, 'tts_idle': _tts_idle_s,
+            # une voix occupe la carte graphique (sinon : en veille)
+            'voices_loaded': bool(_tts_engines) or (qwen and _qwen_loaded())}
 
 
 def main() -> None:
@@ -409,9 +528,13 @@ def main() -> None:
     start_qwen()
     threading.Thread(target=discovery_responder, daemon=True).start()
     threading.Thread(target=keep_awake, daemon=True).start()
+    threading.Thread(target=unload_idle_voices, daemon=True).start()
     try:
+        # proxy_headers=False : Tailscale Funnel ajoute X-Forwarded-For ; s'y fier
+        # ferait passer une demande d'Internet pour une demande du Wi-Fi (code à
+        # 6 chiffres accepté). L'adresse vue doit rester 127.0.0.1 → clé longue.
         uvicorn.run(app, host='0.0.0.0', port=int(cfg['port']), log_level='warning',
-                    log_config=None)
+                    log_config=None, proxy_headers=False)
     finally:
         for proc in (_llama_proc, _qwen_proc):
             if proc and proc.poll() is None:

@@ -4,7 +4,8 @@ import '../l10n/generated/app_localizations.dart';
 import '../services/pc_boost_service.dart';
 
 /// Réglage « TalkTome Boost » (écran Profil) : état de la connexion à
-/// l'ordinateur, et panneau pour activer / saisir adresses et code.
+/// l'ordinateur, et panneau pour activer / saisir l'adresse Home Connections
+/// et sa clé (ou les anciennes adresses Boost et leur code).
 class PcBoostTile extends StatefulWidget {
   const PcBoostTile({super.key});
 
@@ -31,6 +32,10 @@ class _PcBoostTileState extends State<PcBoostTile> {
         return l10n.profileScreen_boostConnected(host ?? '');
       case PcBoostStatus.unreachable:
         return l10n.profileScreen_boostUnreachable;
+      case PcBoostStatus.keyRefused:
+        return l10n.profileScreen_boostKeyRefused;
+      case PcBoostStatus.blocked:
+        return l10n.profileScreen_boostBlocked;
     }
   }
 
@@ -39,6 +44,8 @@ class _PcBoostTileState extends State<PcBoostTile> {
       case PcBoostStatus.connected:
         return Colors.green;
       case PcBoostStatus.unreachable:
+      case PcBoostStatus.keyRefused:
+      case PcBoostStatus.blocked:
         return Colors.orange;
       case PcBoostStatus.searching:
         return Theme.of(context).colorScheme.primary;
@@ -50,7 +57,10 @@ class _PcBoostTileState extends State<PcBoostTile> {
   Future<void> _openPanel() async {
     final l10n = AppLocalizations.of(context)!;
     var enabled = _boost.enabled;
-    final hosts = TextEditingController(text: _boost.hosts.join(', '));
+    final hosts = TextEditingController(
+        text: _boost.hosts.isEmpty
+            ? PcBoostService.defaultAddress
+            : _boost.hosts.join(', '));
     final code = TextEditingController(text: _boost.code);
 
     await showModalBottomSheet(
@@ -89,7 +99,8 @@ class _PcBoostTileState extends State<PcBoostTile> {
                 decoration: InputDecoration(
                   labelText: l10n.profileScreen_boostHosts,
                   helperText: l10n.profileScreen_boostHostsHint,
-                  hintText: '192.168.0.18, 100.x.y.z',
+                  hintText: PcBoostService.defaultAddress,
+                  helperMaxLines: 3,
                 ),
                 keyboardType: TextInputType.url,
                 onSubmitted: (_) => apply(),
@@ -97,8 +108,14 @@ class _PcBoostTileState extends State<PcBoostTile> {
               const SizedBox(height: 12),
               TextField(
                 controller: code,
-                decoration: InputDecoration(labelText: l10n.profileScreen_boostCode),
-                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: l10n.profileScreen_boostCode,
+                  helperText: l10n.profileScreen_boostCodeHint,
+                ),
+                keyboardType: TextInputType.visiblePassword,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
                 onSubmitted: (_) => apply(),
               ),
               const SizedBox(height: 16),
