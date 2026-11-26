@@ -70,7 +70,9 @@ def _config() -> dict:
 CFG = _config()
 SIZE = CFG.get('qwen_tts_size', '1.7B')
 DTYPE = torch.float32 if CFG.get('qwen_tts_dtype') == 'float32' else torch.float16
-IDLE_SECONDS = 60 * float(CFG.get('qwen_tts_idle_minutes', 10))
+# Délai de veille : celui que Home Connections a donné à TalkTome Boost
+# (« tts_idle_seconds », 0 = jamais), sinon l'ancien réglage en minutes.
+IDLE_SECONDS = float(CFG['tts_idle_seconds']) if 'tts_idle_seconds' in CFG     else 60 * float(CFG.get('qwen_tts_idle_minutes', 10))
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 if DEVICE == 'cpu':
     DTYPE = torch.float32  # le float16 n'est pas utilisable sur processeur
@@ -174,11 +176,21 @@ class Engine:
 
     def unload_if_idle(self) -> None:
         with self.lock:
-            if self.model is not None and time.monotonic() - self.last_use > IDLE_SECONDS:
+            if (self.model is not None and IDLE_SECONDS > 0
+                    and time.monotonic() - self.last_use > IDLE_SECONDS):
                 log.info('inactif : modèle déchargé (mémoire graphique libérée)')
-                model, self.model = self.model, None
-                self.prompts.clear()
-                _free(model)
+                self._unload()
+
+    def unload(self) -> None:
+        with self.lock:
+            if self.model is not None:
+                log.info('modèle déchargé à la demande (mémoire graphique libérée)')
+                self._unload()
+
+    def _unload(self) -> None:
+        model, self.model = self.model, None
+        self.prompts.clear()
+        _free(model)
 
 
 def serve() -> None:
@@ -204,6 +216,21 @@ def serve() -> None:
         ready = all((REF_DIR / f'{i}.wav').exists() for i in VOICES)
         return {'ok': True, 'voices_ready': ready, 'device': DEVICE,
                 'model': BASE_MODEL, 'loaded': engine.model is not None}
+
+    class IdleReq(BaseModel):
+        seconds: float
+
+    @app.post('/idle')
+    def idle(req: IdleReq):
+        global IDLE_SECONDS
+        IDLE_SECONDS = max(0.0, req.seconds)
+        log.info('veille après %s s', IDLE_SECONDS or 'jamais')
+        return {'ok': True}
+
+    @app.post('/free')
+    def free():
+        engine.unload()
+        return {'ok': True}
 
     @app.post('/tts')
     def tts(req: Req):

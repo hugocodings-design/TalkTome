@@ -14,9 +14,11 @@ Tout vit dans %LOCALAPPDATA%\\TalkTomeBoost :
   models\\tts\\     modèles de voix (mêmes dossiers que sur le téléphone)
   models\\llm\\     qwen3-4b-instruct.gguf
   llama\\           serveur llama.cpp officiel (build CUDA)
-  config.json      code d'appairage + port ; « tts_idle_minutes » (5) et
+  config.json      code d'appairage + port ; « tts_idle_seconds » (300) et
                    « llm_idle_minutes » (5) : délais avant de libérer la carte
-                   graphique quand personne ne s'en sert (0 = jamais)
+                   graphique quand personne ne s'en sert (0 = jamais).
+                   Home Connections règle le délai des voix (POST /voices/idle)
+                   et les libère à la demande (POST /voices/free).
   boost.log        journal
 """
 from __future__ import annotations
@@ -201,23 +203,36 @@ _tts_engines: dict[str, sherpa_onnx.OfflineTts] = {}
 _tts_lock = threading.Lock()
 _provider = 'cuda'
 _tts_last_use = 0.0  # dernière synthèse Kokoro / Piper (time.monotonic)
-TTS_IDLE_SECONDS = 60 * float(cfg.get('tts_idle_minutes', 5))
 LLM_IDLE_SECONDS = int(60 * float(cfg.get('llm_idle_minutes', 5)))
+
+
+def _initial_tts_idle() -> int:
+    if 'tts_idle_seconds' in cfg:
+        return int(cfg['tts_idle_seconds'])
+    return int(60 * float(cfg.get('tts_idle_minutes', 5)))
+
+
+_tts_idle_s = _initial_tts_idle()  # 0 = jamais
+
+
+def _free_voices(reason: str) -> int:
+    """Décharge les voix Kokoro / Piper (à appeler avec _tts_lock)."""
+    n = len(_tts_engines)
+    if n:
+        _tts_engines.clear()
+        log.info('%d voix déchargée(s) %s', n, reason)
+    return n
 
 
 def unload_idle_voices() -> None:
     """Libère la carte graphique : les voix Kokoro / Piper inutilisées depuis
-    TTS_IDLE_SECONDS sont déchargées ; la phrase suivante les recharge
-    (quelques secondes). Qwen3-TTS a son propre délai (qwen_tts_worker.py)."""
-    if TTS_IDLE_SECONDS <= 0:
-        return
+    _tts_idle_s sont déchargées ; la phrase suivante les recharge (quelques
+    secondes). Qwen3-TTS reçoit le même délai (qwen_tts_worker.py)."""
     while True:
-        time.sleep(30)
+        time.sleep(15)
         with _tts_lock:
-            if _tts_engines and time.monotonic() - _tts_last_use > TTS_IDLE_SECONDS:
-                n = len(_tts_engines)
-                _tts_engines.clear()
-                log.info('%d voix déchargée(s) après %d min sans usage', n, TTS_IDLE_SECONDS // 60)
+            if _tts_idle_s > 0 and _tts_engines and time.monotonic() - _tts_last_use > _tts_idle_s:
+                _free_voices(f'après {_tts_idle_s} s sans usage')
 
 
 def _engine(req: TtsRequest) -> sherpa_onnx.OfflineTts:
@@ -341,6 +356,53 @@ def _qwen_tts(req: TtsRequest) -> Response:
     return Response(content=r.content, media_type='audio/wav')
 
 
+def _qwen_post(path: str, body: dict | None = None) -> None:
+    if not _qwen_http_ok():
+        return
+    try:
+        httpx.post(f'http://127.0.0.1:{QWEN_PORT}{path}', json=body or {}, timeout=10)
+    except httpx.HTTPError:
+        log.warning('Qwen3-TTS : %s impossible', path)
+
+
+def _qwen_loaded() -> bool:
+    try:
+        r = httpx.get(f'http://127.0.0.1:{QWEN_PORT}/health', timeout=0.5)
+        return r.status_code == 200 and bool(r.json().get('loaded'))
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
+class IdleRequest(BaseModel):
+    seconds: int
+
+
+@app.post('/voices/idle')
+def voices_idle(req: IdleRequest, request: Request, x_boost_token: str | None = Header(default=None)):
+    """Délai avant de libérer la carte graphique (Kokoro, Piper, Qwen3-TTS), réglé
+    par Home Connections ; gardé dans config.json pour le prochain démarrage."""
+    global _tts_idle_s
+    check_token(x_boost_token, request)
+    if req.seconds < 0 or req.seconds > 24 * 3600:
+        raise HTTPException(status_code=400, detail='délai invalide')
+    _tts_idle_s = req.seconds
+    cfg['tts_idle_seconds'] = req.seconds
+    CONFIG.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
+    _qwen_post('/idle', {'seconds': req.seconds})
+    log.info('voix : veille après %s s', req.seconds or 'jamais')
+    return {'ok': True, 'tts_idle': _tts_idle_s}
+
+
+@app.post('/voices/free')
+def voices_free(request: Request, x_boost_token: str | None = Header(default=None)):
+    """« Libérer maintenant » : décharge toutes les voix (rechargées à la phrase suivante)."""
+    check_token(x_boost_token, request)
+    with _tts_lock:
+        _free_voices('à la demande')
+    _qwen_post('/free')
+    return {'ok': True}
+
+
 # ── IA locale (Qwen via llama.cpp) ───────────────────────────────────────────
 
 _llama_proc: subprocess.Popen | None = None
@@ -429,8 +491,11 @@ async def llm(req: LlmRequest, request: Request, x_boost_token: str | None = Hea
 @app.get('/health')
 def health(request: Request, x_boost_token: str | None = Header(default=None)):
     check_token(x_boost_token, request)
+    qwen = _qwen_http_ok()
     return {'ok': True, 'version': VERSION, 'tts': _provider, 'llm': llama_ready(),
-            'qwen3': _qwen_http_ok()}
+            'qwen3': qwen, 'tts_idle': _tts_idle_s,
+            # une voix occupe la carte graphique (sinon : en veille)
+            'voices_loaded': bool(_tts_engines) or (qwen and _qwen_loaded())}
 
 
 def main() -> None:
