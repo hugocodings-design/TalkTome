@@ -187,6 +187,13 @@ void main() async {
 
   runApp(const TalkTomeApp());
 
+  // Home Connections : « TalkTome est ouvert / lit » → Qwen reste chargé.
+  PcBoostService.instance.startPresence();
+  audioHandler?.playbackState
+      .map((s) => s.playing)
+      .distinct()
+      .listen(PcBoostService.instance.setReading);
+
   // Debug uniquement, et seulement si un fichier déclencheur a été déposé
   // via adb — voir llm_selftest.dart.
   unawaited(runLlmSelfTestIfRequested());

@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -374,6 +375,62 @@ class PcBoostService {
   /// L'IA locale tourne-t-elle sur l'ordinateur ?
   Future<bool> llmAvailable() async => await base() != null && _llmReady;
 
+  // ── Présence (Home Connections) ────────────────────────────────────────────
+  // Tant que TalkTome est à l'écran ou lit un livre, il le signale toutes les
+  // 15 s (`POST /v1/presence`) : Home Connections garde alors Qwen chargé
+  // (réglage « open » de TalkTome), sinon il le met en veille selon son délai.
+  bool _onScreen = true;
+  bool _reading = false;
+  Timer? _presenceTimer;
+  AppLifecycleListener? _lifecycle;
+  bool _presenceSent = false;
+
+  /// À appeler une fois au démarrage.
+  void startPresence() {
+    _lifecycle ??= AppLifecycleListener(
+      onResume: () => _setPresence(screen: true),
+      onHide: () => _setPresence(screen: false),
+    );
+    _setPresence(screen: true);
+  }
+
+  /// La lecture démarre ou s'arrête (écran éteint compris).
+  void setReading(bool reading) => _setPresence(reading: reading);
+
+  void _setPresence({bool? screen, bool? reading}) {
+    final was = _onScreen || _reading;
+    _onScreen = screen ?? _onScreen;
+    _reading = reading ?? _reading;
+    final active = _onScreen || _reading;
+    if (active && _presenceTimer == null) {
+      _presenceTimer = Timer.periodic(const Duration(seconds: 15), (_) => _sendPresence(true));
+      _sendPresence(true);
+    } else if (!active && was) {
+      _presenceTimer?.cancel();
+      _presenceTimer = null;
+      _sendPresence(false);
+    }
+  }
+
+  void _sendPresence(bool active) {
+    if (!active && !_presenceSent) return;
+    unawaited(() async {
+      try {
+        final b = await base();
+        if (b == null || !_hub) return;
+        final req = await _remoteHttp.postUrl(Uri.parse('$b/v1/presence'));
+        _hubHeaders(req.headers);
+        req.headers.contentType = ContentType.json;
+        req.add(utf8.encode(jsonEncode({'active': active})));
+        final res = await req.close().timeout(const Duration(seconds: 10));
+        await res.drain<void>();
+        _presenceSent = active;
+      } catch (e) {
+        debugPrint('[BOOST] présence non envoyée : $e');
+      }
+    }());
+  }
+
   /// Synthèse d'une phrase sur l'ordinateur. Écrit le WAV dans [outPath] et
   /// renvoie (début de chaque mot, durée), ou null si l'ordinateur n'est pas
   /// joignable — l'appelant synthétise alors sur le téléphone.
@@ -432,10 +489,18 @@ class PcBoostService {
     final b = await base();
     if (b == null) return false;
     try {
-      final uri = Uri.parse('$b/voice_ref').replace(
-          queryParameters: {'voice': voiceId, 'mood': mood});
-      final req = await _http.getUrl(uri);
-      req.headers.set('X-Boost-Token', code);
+      final HttpClientRequest req;
+      if (_hub) {
+        // Home Connections : POST /v1/voice_ref, relayé à TalkTome Boost.
+        req = await _http.postUrl(Uri.parse('$b/v1/voice_ref'));
+        _hubHeaders(req.headers);
+        req.headers.contentType = ContentType.json;
+        req.add(utf8.encode(jsonEncode({'voice': voiceId, 'mood': mood})));
+      } else {
+        req = await _http.getUrl(Uri.parse('$b/voice_ref').replace(
+            queryParameters: {'voice': voiceId, 'mood': mood}));
+        req.headers.set('X-Boost-Token', code);
+      }
       final res = await req.close().timeout(const Duration(seconds: 20));
       final bytes = await _readAll(res).timeout(const Duration(seconds: 30));
       if (res.statusCode != 200 || bytes.length < 44) return false;
